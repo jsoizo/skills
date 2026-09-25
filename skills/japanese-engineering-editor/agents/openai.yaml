@@ -1,0 +1,4 @@
+interface:
+  display_name: "Japanese Engineering Editor"
+  short_description: "直訳調の技術日本語を、意味を保った自然な文章へ整える"
+  default_prompt: "$japanese-engineering-editor を使って、このソフトウェア技術文書を意味の正確さを保った自然な日本語に翻訳または推敲してください。"
