@@ -115,3 +115,11 @@ Reason: `依存関係を解決する` is established usage; do not expand it mer
 **Wrongly strong:** クライアントは接続を再利用する必要があります。
 
 **Preferred:** クライアントでは、接続の再利用を推奨します。
+
+## Decision framing
+
+Context: `今の穴` refers to a blocking call found in a WebFlux handler.
+
+**Original:** ここには 2 つの問いがあり、答えは別々です。1 つ目は「今の穴を直すか」で、答えは「直す」です。2 つ目は「WebFlux を続けるか」で、性能は判断材料になりません。どちらを選んでも、今の負荷なら性能は足ります。
+
+**Preferred:** 見つかった同期処理は直します。WebFlux を続けるかどうかは、性能では決まりません。続けてもやめても、今の負荷なら性能は十分だからです。

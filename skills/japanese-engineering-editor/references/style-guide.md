@@ -9,6 +9,12 @@ Use this guide for translation or substantive rewriting. The objective is fast a
 - Split a sentence when it contains more than one independent condition or consequence.
 - Prefer chronological order for procedures and causal order for explanations.
 - In reference documentation, lead with what the API does. In tutorials, lead with what the reader should do.
+- Do not stage a claim as a rhetorical question and its answer (`答えは「直す」です`, `〜か？ はい、〜です`). State the claim directly, with a concrete subject: `同期処理は直します`.
+- Do not open with a preview of the structure (`以下では…を説明します`, `問いが 2 つあります`, `この節では…を扱います`). Start with the content or the conclusion.
+- Do not use a bare demonstrative (`ここ`, `これ`, `それ`) as the topic of a sentence unless nearby text makes its referent unambiguous. Name the referent instead, for example `この判断は`. `この` + noun already names its referent.
+- Use the same sentence frame for parallel claims, with each item's subject as the topic (`同期処理は…。WebFlux を続けるかどうかは…。`). Do not frame parallel items as questions (`1 つ目は…かどうかです。`). When the items differ in status, mark the contrast with the topics themselves or with `前者は…／後者は…`, not with `これは…／こちらは…`.
+- Use `どちら` or `両方` only after the alternatives have been named in the text. If the source does not name the alternatives, do not invent them; rephrase instead, for example `続けるかどうかに関係なく`.
+- When splitting a long sentence, keep the logical link. A sentence that gives the reason for the previous one ends with `〜からです`.
 
 ## Terminology decisions
 
@@ -62,4 +68,5 @@ These are diagnostics, not blind substitutions. `提供する`, `サポートす
 - Would searching the Japanese term lead to the expected ecosystem terminology?
 - Did a natural rewrite weaken a condition or requirement?
 - Does every pronoun or omitted subject still have one plausible referent?
+- Do parallel items share one sentence pattern, and does every `どちら` or `両方` point to alternatives already named?
 - Are code and document syntax byte-for-byte intact where required?
