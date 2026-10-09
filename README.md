@@ -7,6 +7,7 @@ Agent skills that follow the [Agent Skills](https://agentskills.io) format. They
 | Skill | Description |
 | --- | --- |
 | [japanese-engineering-editor](skills/japanese-engineering-editor/SKILL.md) | Translate English engineering content into natural Japanese, or rewrite stiff, literal Japanese, while preserving technical meaning. |
+| [visual-compare](skills/visual-compare/SKILL.md) | Compare two sets of same-framed screenshots (before/after, Figma vs implementation) and build an HTML page with side-by-side, slider, overlay, blink and pixel-diff views. Requires ImageMagick 7. |
 
 ## Layout
 
@@ -14,6 +15,8 @@ Agent skills that follow the [Agent Skills](https://agentskills.io) format. They
 skills/
 └── <skill-name>/
     ├── SKILL.md        # required: frontmatter (name, description) + instructions
+    ├── scripts/        # optional: executable helpers the instructions call
+    ├── assets/         # optional: templates and other files used in output
     ├── references/     # optional: docs loaded on demand
     └── agents/         # optional: agent-specific metadata (e.g. openai.yaml for Codex)
 ```

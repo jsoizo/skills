@@ -1,0 +1,327 @@
+<title>__TITLE__</title>
+<style>
+  /* Layout: summary and view controls on top; image list on the left, the selected pair on the right. Stacks to one column on narrow screens. */
+  :root {
+    --bg: #f6f7f8;
+    --panel: #ffffff;
+    --border: #e3e6e8;
+    --border-strong: #c9cfd4;
+    --hover: #eef0f2;
+    --text: #2f3437;
+    --sub: #687076;
+    --accent: #2563a8;
+    --accent-bg: #e3edf8;
+    --on-accent: #ffffff;
+    --ok: #2e7d4f;
+    --ok-bg: #e6f4ec;
+    --ng: #c4002b;
+    --ng-bg: #ffecef;
+    --warn: #8a5300;
+    --warn-bg: #fff3dc;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16191b; --panel: #1f2326; --border: #30363a; --border-strong: #454c52; --hover: #2a2f33; --text: #e4e7ea; --sub: #9aa3aa;
+      --accent: #7fb2e8; --accent-bg: #1c3550; --on-accent: #0d1a26; --ok: #7fd1a0; --ok-bg: #173325; --ng: #ff8a9b; --ng-bg: #3d1a21; --warn: #f2c26b; --warn-bg: #3a2c10;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16191b; --panel: #1f2326; --border: #30363a; --border-strong: #454c52; --hover: #2a2f33; --text: #e4e7ea; --sub: #9aa3aa;
+    --accent: #7fb2e8; --accent-bg: #1c3550; --on-accent: #0d1a26; --ok: #7fd1a0; --ok-bg: #173325; --ng: #ff8a9b; --ng-bg: #3d1a21; --warn: #f2c26b; --warn-bg: #3a2c10;
+    color-scheme: dark;
+  }
+  /*__THEME__*/
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.6; }
+  .wrap { padding-inline: 16px; padding-block: 24px 48px; max-width: 1760px; margin-inline: auto; display: grid; gap: 16px; }
+  h1 { font-size: 22px; margin: 0; text-wrap: balance; }
+  .lead { margin: 4px 0 0; color: var(--sub); white-space: pre-line; }
+  .summary { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .pill { font-weight: 700; padding: 2px 12px; border-radius: 9999px; font-variant-numeric: tabular-nums; }
+  .hint { font-size: 12px; color: var(--sub); }
+  .s-same { background: var(--ok-bg); color: var(--ok); }
+  .s-changed { background: var(--ng-bg); color: var(--ng); }
+  .s-size, .s-only-a, .s-only-b { background: var(--warn-bg); color: var(--warn); }
+
+  .toolbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 2; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; }
+  .toolbar label { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border-strong); border-radius: 4px; overflow: hidden; }
+  .seg button { border: 0; background: var(--panel); color: var(--text); padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border-strong); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+  select, input[type="range"] { font: inherit; font-size: 13px; }
+
+  .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+  nav { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 72px); max-height: calc(100dvh - 96px); overflow-y: auto; }
+  nav h2 { font-size: 12px; color: var(--sub); letter-spacing: 0.04em; margin: 12px 8px 4px; font-weight: 700; }
+  nav h2:first-child { margin-top: 4px; }
+  nav ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+  nav button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; border: 0; background: none; color: var(--text); padding: 6px 10px; border-radius: 8px; font: inherit; font-size: 13px; cursor: pointer; }
+  nav button span:first-child { min-width: 0; overflow-wrap: anywhere; }
+  nav button:hover { background: var(--hover); }
+  nav button[aria-current="true"] { background: var(--accent-bg); font-weight: 700; }
+  .badge { flex-shrink: 0; font-size: 11px; font-weight: 700; border-radius: 9999px; padding: 0 8px; font-variant-numeric: tabular-nums; }
+  button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .viewer { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; display: grid; gap: 12px; min-width: 0; }
+  .viewer-head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+  .viewer h2 { font-size: 17px; margin: 0; overflow-wrap: anywhere; }
+  .viewer a { color: var(--accent); font-size: 13px; }
+  .note { margin: 0; font-size: 13px; color: var(--sub); white-space: pre-line; }
+  .meta { font-size: 12px; color: var(--sub); font-family: var(--mono); }
+  .stage { overflow-x: auto; padding-bottom: 8px; display: grid; gap: 8px; justify-items: start; }
+  .side { display: flex; gap: 16px; align-items: flex-start; width: max-content; }
+  figure { margin: 0; display: grid; gap: 4px; align-content: start; }
+  figcaption, .cap { font-size: 12px; color: var(--sub); }
+  .stack { position: relative; }
+  .stack img { position: absolute; left: 0; top: 0; }
+  .stage img { display: block; max-width: none; box-shadow: 0 0 0 1px var(--border); }
+  .slider { width: min(480px, 100%); }
+
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    nav, .toolbar { position: static; max-height: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1 id="pageTitle"></h1>
+    <p class="lead" id="lead"></p>
+  </header>
+  <div class="summary" id="summary"></div>
+
+  <div class="toolbar" role="group" id="toolbar">
+    <div class="seg" id="modes"></div>
+    <label for="zoom"><span id="zoomLabel"></span>
+      <select id="zoom">
+        <option value="0.25">25%</option><option value="0.5">50%</option><option value="0.75">75%</option>
+        <option value="1" selected>100%</option><option value="2">200%</option>
+      </select>
+    </label>
+    <label id="opacityRow" for="opacity"><span id="opacityLabel"></span> <input type="range" id="opacity" min="0" max="100" value="50" /></label>
+    <span class="hint" id="keysHint"></span>
+  </div>
+
+  <div class="layout">
+    <nav id="nav"></nav>
+    <section class="viewer">
+      <div class="viewer-head"><h2 id="title"></h2><a id="link" target="_blank" rel="noreferrer" hidden></a></div>
+      <p class="note" id="note" hidden></p>
+      <div class="meta" id="meta"></div>
+      <div class="stage" id="stage"></div>
+    </section>
+  </div>
+</div>
+
+<script>
+  const DATA = __DATA__
+  const I18N = {
+    en: {
+      modes: { side: "Side by side", slide: "Slide", overlay: "Overlay", blink: "Blink", diff: "Diff" },
+      zoom: "Zoom", opacity: "Opacity of", keys: "j / k (or ↑↓ in the list) move between images, 1–5 switch view",
+      status: { same: "No diff", changed: (amount) => amount, size: "Size differs", "only-a": (l) => `Only in ${l}`, "only-b": (l) => `Only in ${l}` },
+      summaryAll: (n) => `All ${n} images match`, summaryCount: (n, k) => `${k} of ${n} differ`,
+      changedN: (n) => `${n} changed`, sizeN: (n) => `${n} size differs`, onlyN: (n) => `${n} only on one side`,
+      diffCap: (amount) => `Diff (differing pixels in red, ${amount})`, under: "Bottom", over: "Top", link: "Open source",
+      size: "Size", missing: (l) => `No image in ${l}`, toolbar: "View", nav: "Images", ungrouped: "Images", empty: "No images to compare",
+    },
+    ja: {
+      modes: { side: "左右", slide: "スライド", overlay: "重ねる", blink: "点滅", diff: "差分" },
+      zoom: "倍率", opacity: "透明度", keys: "j / k（一覧では ↑↓）で画像を移動、1〜5 で表示を切り替え",
+      status: { same: "差なし", changed: (amount) => amount, size: "大きさが違う", "only-a": (l) => `${l}のみ`, "only-b": (l) => `${l}のみ` },
+      summaryAll: (n) => `${n} 枚すべて画素の差なし`, summaryCount: (n, k) => `${n} 枚中 ${k} 枚に差あり`,
+      changedN: (n) => `画素の差 ${n} 枚`, sizeN: (n) => `大きさが違う ${n} 枚`, onlyN: (n) => `片方のみ ${n} 枚`,
+      diffCap: (amount) => `差分（違う画素を赤で表示、${amount}）`, under: "下", over: "上", link: "元を開く",
+      size: "大きさ", missing: (l) => `${l}に画像がありません`, toolbar: "表示の切り替え", nav: "画像の一覧", ungrouped: "画像", empty: "比べる画像がありません",
+    },
+  }
+  const T = I18N[DATA.lang] || I18N.en
+  const A = DATA.labels.a, B = DATA.labels.b
+  const MODES = ["side", "overlay", "blink", "diff", "slide"]
+  const items = DATA.items
+  const $ = (id) => document.getElementById(id)
+  let index = 0, mode = "side", slidePos = 50, blinkTimer = null
+
+  document.documentElement.lang = DATA.lang === "ja" ? "ja" : "en"
+  $("pageTitle").textContent = DATA.title
+  $("lead").textContent = DATA.description || ""
+  $("zoomLabel").textContent = T.zoom
+  $("keysHint").textContent = T.keys
+  $("toolbar").setAttribute("aria-label", T.toolbar)
+  $("nav").setAttribute("aria-label", T.nav)
+
+  // Share of the compared area; never round a non-zero difference down to 0%
+  const pct = (it) => {
+    const p = (it.ratio || 0) * 100
+    return it.px === 0 ? "0%" : p < 0.01 ? "<0.01%" : p < 1 ? `${p.toFixed(2)}%` : `${p.toFixed(1)}%`
+  }
+  const amount = (it) => DATA.lang === "ja" ? `${pct(it)}、${it.px.toLocaleString()}px` : `${pct(it)} (${it.px.toLocaleString()}px)`
+  const statusText = (it) => it.status === "changed" ? T.status.changed(pct(it)) : it.status === "only-a" ? T.status["only-a"](A) : it.status === "only-b" ? T.status["only-b"](B) : T.status[it.status]
+  const badge = (it) => {
+    const s = document.createElement("span")
+    s.className = `badge s-${it.status}`
+    s.textContent = statusText(it)
+    return s
+  }
+
+  const count = (s) => items.filter((it) => it.status === s).length
+  const differing = items.length - count("same")
+  const summary = $("summary")
+  const pill = (cls, text) => { const s = document.createElement("span"); s.className = `pill ${cls}`; s.textContent = text; summary.appendChild(s) }
+  if (items.length === 0) pill("s-size", T.empty)
+  else if (differing === 0) pill("s-same", T.summaryAll(items.length))
+  else {
+    pill("s-changed", T.summaryCount(items.length, differing))
+    if (count("changed")) pill("s-changed", T.changedN(count("changed")))
+    if (count("size")) pill("s-size", T.sizeN(count("size")))
+    if (count("only-a") + count("only-b")) pill("s-only-a", T.onlyN(count("only-a") + count("only-b")))
+  }
+
+  const navButtons = []
+  const groups = [...new Set(items.map((it) => it.group))]
+  groups.forEach((g) => {
+    if (groups.length > 1 || g) {
+      const h = document.createElement("h2")
+      h.textContent = g || T.ungrouped
+      $("nav").appendChild(h)
+    }
+    const ul = document.createElement("ul")
+    items.forEach((it, i) => {
+      if (it.group !== g) return
+      const li = document.createElement("li")
+      const b = document.createElement("button")
+      b.type = "button"
+      const name = document.createElement("span")
+      name.textContent = it.title
+      b.append(name, badge(it))
+      b.onclick = () => select(i)
+      li.appendChild(b); ul.appendChild(li); navButtons[i] = b
+    })
+    $("nav").appendChild(ul)
+  })
+
+  MODES.forEach((m, i) => {
+    const b = document.createElement("button")
+    b.type = "button"; b.dataset.mode = m; b.textContent = T.modes[m]
+    b.onclick = () => { mode = m; render() }
+    $("modes").appendChild(b)
+  })
+
+  function img(image, cls = "") {
+    const el = document.createElement("img")
+    // Encode each segment so "#", "?" or "%" in a file name stay part of the path
+    el.src = image.src.split("/").map(encodeURIComponent).join("/"); el.alt = ""; el.className = cls
+    el.width = Math.round(image.w * Number($("zoom").value))
+    return el
+  }
+  function figure(caption, image) {
+    const f = document.createElement("figure")
+    const c = document.createElement("figcaption")
+    c.textContent = caption
+    f.append(c, image ? img(image) : document.createTextNode(""))
+    return f
+  }
+  // Size the frame to the larger image so neither image of a mismatched pair spills out
+  function stack(under, over) {
+    const s = document.createElement("div")
+    s.className = "stack"
+    const z = Number($("zoom").value)
+    s.style.width = `${Math.round(Math.max(under.w, over.w) * z)}px`
+    s.style.height = `${Math.round(Math.max(under.h, over.h) * z)}px`
+    const top = img(over)
+    s.append(img(under), top)
+    return { el: s, top }
+  }
+  function caption(text, id) {
+    const c = document.createElement("div")
+    c.className = "cap"; c.textContent = text
+    if (id) c.id = id
+    return c
+  }
+
+  function render() {
+    clearInterval(blinkTimer)
+    const it = items[index]
+    $("title").textContent = it.group ? `${it.title}（${it.group}）` : it.title
+    const link = $("link")
+    link.hidden = !it.link
+    if (it.link) { link.href = it.link; link.textContent = T.link }
+    $("note").hidden = !it.note
+    $("note").textContent = it.note || ""
+    const sizeOf = (x) => x ? `${x.w}×${x.h}` : "—"
+    $("meta").textContent = `${it.path} ・ ${T.size}: ${A} ${sizeOf(it.a)} / ${B} ${sizeOf(it.b)}`
+    document.querySelectorAll("#modes button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)))
+    navButtons.forEach((b, i) => b.setAttribute("aria-current", String(i === index)))
+    $("opacityRow").hidden = mode !== "overlay"
+    $("opacityLabel").textContent = `${T.opacity}${DATA.lang === "ja" ? `（${B}）` : ` ${B}`}`
+
+    const stage = $("stage")
+    stage.replaceChildren()
+    if (!it.a || !it.b) {
+      const only = it.a ? it.a : it.b
+      stage.append(caption(T.missing(it.a ? B : A)), figure(it.a ? A : B, only))
+      return
+    }
+    if (mode === "side") {
+      const row = document.createElement("div")
+      row.className = "side"
+      row.append(figure(A, it.a), figure(B, it.b), figure(T.diffCap(amount(it)), it.diff))
+      stage.appendChild(row)
+    } else if (mode === "diff") {
+      stage.append(caption(T.diffCap(amount(it))), img(it.diff))
+    } else if (mode === "slide") {
+      const range = document.createElement("input")
+      range.type = "range"; range.min = "0"; range.max = "100"; range.value = String(slidePos); range.className = "slider"
+      range.setAttribute("aria-label", `${A} / ${B}`)
+      const { el, top } = stack(it.b, it.a)
+      const apply = () => { slidePos = Number(range.value); top.style.clipPath = `inset(0 ${100 - slidePos}% 0 0)` }
+      range.oninput = apply
+      apply()
+      stage.append(caption(`← ${A} ｜ ${B} →`), range, el)
+    } else {
+      const { el, top } = stack(it.a, it.b)
+      if (mode === "overlay") {
+        top.style.opacity = Number($("opacity").value) / 100
+        stage.append(caption(`${T.under}: ${A} ／ ${T.over}: ${B}（${$("opacity").value}%）`), el)
+      } else {
+        const cap = caption(A)
+        let on = false
+        top.style.opacity = 0
+        blinkTimer = setInterval(() => { on = !on; top.style.opacity = on ? 1 : 0; cap.textContent = on ? B : A }, 700)
+        stage.append(cap, el)
+      }
+    }
+  }
+  function select(i) { index = (i + items.length) % items.length; render() }
+
+  $("zoom").onchange = render
+  $("opacity").oninput = render
+  document.addEventListener("keydown", (e) => {
+    if (["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) return
+    // Leave browser shortcuts (Cmd+1 etc.) alone
+    if (e.metaKey || e.ctrlKey || e.altKey) return
+    // Arrow keys move through the list only while the list has focus, so they still scroll tall screenshots elsewhere
+    const inNav = !!e.target.closest?.("nav")
+    const step = e.key === "j" || (inNav && e.key === "ArrowDown") ? 1 : e.key === "k" || (inNav && e.key === "ArrowUp") ? -1 : 0
+    if (step) {
+      select(index + step)
+      if (inNav) navButtons[index].focus()
+      e.preventDefault()
+      return
+    }
+    const m = MODES[Number(e.key) - 1]
+    if (m) { mode = m; render() }
+  })
+  if (items.length === 0) {
+    $("stage").textContent = T.empty
+  } else {
+    const firstDiff = items.findIndex((it) => it.status !== "same")
+    select(firstDiff >= 0 ? firstDiff : 0)
+  }
+</script>

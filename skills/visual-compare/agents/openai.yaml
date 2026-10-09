@@ -1,0 +1,4 @@
+interface:
+  display_name: "Visual Compare"
+  short_description: "同じ画角の 2 組の画像を比べ、差を確かめる HTML のページを作る"
+  default_prompt: "$visual-compare を使って、この 2 組のスクリーンショットを比べる比較ページを作ってください。"
