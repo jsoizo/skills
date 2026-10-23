@@ -6,7 +6,7 @@ import { CodexAdapter } from "./lib/adapters/codex"
 import type { AgentEvent } from "./lib/adapters/types"
 import { chunkSentences, play, Synthesizer, voiceConfigFromEnv } from "./lib/audio"
 import { AbortedError, PlayLock } from "./lib/lock"
-import { lastSpeakerPath, playLockPath, sessionLogPath, waitingDir } from "./lib/paths"
+import { hushPath, lastSpeakerPath, playLockPath, sessionLogPath, waitingDir } from "./lib/paths"
 import { isAlive, procRef } from "./lib/proc"
 import { loadDictionaries, SayReadingProfile } from "./lib/reading"
 import { liveSessions, readState, removeState, writeState, type SessionState } from "./lib/state"
@@ -238,6 +238,18 @@ function checkLiveness() {
   if ((fs.statSync(log, { throwIfNoEntry: false })?.size ?? 0) > LOG_MAX_BYTES) fs.truncateSync(log, 0)
 }
 
+// `talkback hush` touches a file rather than signalling us: a watcher without a handler would die on SIGUSR1.
+const hushMtime = () => fs.statSync(hushPath(), { throwIfNoEntry: false })?.mtimeMs ?? 0
+let hushSeen = hushMtime()
+
+function checkHush() {
+  const m = hushMtime()
+  if (m <= hushSeen) return
+  hushSeen = m
+  log("hushed")
+  interrupt()
+}
+
 function readQuiet(file: string): string {
   try {
     return fs.readFileSync(file, "utf8").trim()
@@ -247,13 +259,17 @@ function readQuiet(file: string): string {
 }
 
 for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"] as const) process.on(sig, () => shutdown(sig))
+
 process.on("uncaughtException", (e) => log(`uncaught: ${e.stack ?? e}`))
 process.on("unhandledRejection", (e) => log(`unhandled: ${(e as Error)?.stack ?? e}`))
 
 log(`started for ${state.agent} session ${sessionId}, agent pid ${state.agentProc.pid}, watcher ${procRef(process.pid)?.pid}`)
 nameFile().catch(() => (nameAudio = null))
 fs.watch(path.dirname(state.transcript), () => readNew())
-setInterval(readNew, TAIL_POLL_MS)
+setInterval(() => {
+  checkHush()
+  readNew()
+}, TAIL_POLL_MS)
 setInterval(checkLiveness, LIVENESS_POLL_MS)
 readNew()
 speaker()

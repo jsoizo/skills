@@ -73,6 +73,24 @@ describe("Claude Code session", () => {
     expect(spoken(s.home)).toHaveLength(1)
   }, 30000)
 
+  // The desktop app writes nothing to the transcript on Esc, so hush is the way to silence it without a prompt.
+  test("hush stops the current and queued speech but keeps speech on for the next reply", async () => {
+    const s = claudeSession({ lastSpeaker: SID, afplaySeconds: 3 })
+    expect(runCli(["on"], s.env).code).toBe(0)
+    const long = Array.from({ length: 9 }, (_, i) => `これは長い返答の ${i + 1} 文目です。`).join("")
+    appendLines(s.transcript, [claude.text("m1", long, "end_turn"), claude.text("m2", "あとの返答。", "end_turn")])
+    await waitFor(() => spoken(s.home).length >= 1, 15000, "first chunk")
+    // Called the way a keyboard shortcut calls it: outside any agent session.
+    const hush = runCli(["hush"], { PATH: s.env.PATH, HOME: s.home, TMPDIR: s.env.TMPDIR })
+    expect(hush.stdout).toContain("1 件")
+    await Bun.sleep(4000)
+    expect(spoken(s.home)).toHaveLength(1)
+    expect(runCli(["status"], s.env).stdout).toContain("このセッション: ON")
+    appendLines(s.transcript, [claude.text("m3", "次の返答。", "end_turn")])
+    await waitFor(() => spoken(s.home).length >= 2, 15000, "next reply")
+    expect(spoken(s.home).at(-1)).toBe("次の返答。")
+  }, 40000)
+
   // Regression: task notifications are user lines too, and used to cut the reply being read short.
   test("a harness-injected user line during speech does not interrupt", async () => {
     const s = claudeSession({ lastSpeaker: SID, afplaySeconds: 1 })

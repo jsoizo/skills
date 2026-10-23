@@ -33,6 +33,7 @@ Codex で使う場合は、あわせて [Codex で使う準備](#codex-で使う
 | --- | --- | --- |
 | 読み上げを ON にする | `/talkback on` | `$talkback on` |
 | 読み上げを OFF にする | `/talkback off` | `$talkback off` |
+| 今の読み上げだけを止める（ON のまま） | `/talkback hush` または [ショートカット](#ショートカットで読み上げを止める) | `$talkback hush` または ショートカット |
 | 状態を確認する | `/talkback status` | `$talkback status` |
 | 動かない原因を調べる | `/talkback doctor` | `$talkback doctor` |
 
@@ -54,10 +55,26 @@ ON にすると、その返答から読み上げが始まる。エージェン�
 読み上げは、次のときに止まる。止まったときに読み終えていなかった分は捨てる。
 
 - そのセッションで、新しいプロンプトやスラッシュコマンドを送ったとき
-- Esc で turn を中断したとき
+- Esc で turn を中断したとき（デスクトップアプリでは止まらないことがある。下を参照）
 - `/talkback off` を実行したとき
+- `hush` を実行したとき。読み上げは ON のままで、次の返答はまた読む
 
-`!` で実行したシェルコマンドでは止まらない。
+`!` で実行したシェルコマンドでは止まらない。Claude Code のデスクトップアプリでは、Esc で中断しても止まらないことがある。Esc での中断が、transcript に記録されないことがあるからである。読み上げだけを止めたいときは `hush` を使う。
+
+## ショートカットで読み上げを止める
+
+`hush` は、エージェントのセッションの外からでも実行できる。キーボードショートカットに割り当てておくと、どのアプリを前面にしていても読み上げを止められる。止まるのは、動いているすべてのセッションの読み上げである。
+
+ショートカットから呼ぶためのスクリプトが [scripts/raycast/hush.sh](scripts/raycast/hush.sh) にある。
+
+**Raycast の場合**
+
+1. Raycast の設定で Extensions → Script Commands → Add Directories を開き、`~/.agents/skills/talkback/scripts/raycast` を追加する。
+2. 一覧に出る「Talkback Hush」を選び、Hotkey に好きなキーを割り当てる。
+
+**ショートカット.app の場合**
+
+「シェルスクリプトを実行」アクションに `~/.agents/skills/talkback/scripts/raycast/hush.sh` と書き、作ったショートカットにキーボードショートカットを割り当てる。
 
 複数のセッションで ON にしたときは、発話が重ならないよう順番に読む。前と違うセッションの文を読むときは、先にプロジェクト名（セッションを始めたディレクトリの名前）を読む。
 

@@ -11,6 +11,7 @@ Run one command, then tell the user its result in one short line. Do not explain
 | --- | --- |
 | Turn on (also when no argument is given) | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts on` |
 | Turn off | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts off` |
+| Stop what is being read now, keep speech on | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts hush` |
 | Check | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts status` |
 | Diagnose a problem | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts doctor` |
 

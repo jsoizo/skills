@@ -1,11 +1,11 @@
 #!/usr/bin/env bun
 // Turns spoken replies on or off for the current Claude Code or Codex session.
-// Usage: bun talkback.ts on | off | status | doctor
+// Usage: bun talkback.ts on | off | hush | status | doctor
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { detectAgent, findTranscript, transcriptCwd, type AgentInfo } from "./lib/agent"
-import { logsDir, sessionLogPath, sessionsDir, stateDir, waitingDir, WATCHER_PATH } from "./lib/paths"
+import { hushPath, logsDir, sessionLogPath, sessionsDir, stateDir, waitingDir, WATCHER_PATH } from "./lib/paths"
 import { commandLine, isAlive, killGroup, procRef, type ProcRef } from "./lib/proc"
 import { loadDictionaries } from "./lib/reading"
 import { allStates, liveSessions, readState, removeState, watcherAlive, writeState, type SessionState } from "./lib/state"
@@ -92,7 +92,7 @@ function codexRuleAllows(): boolean | null {
   }
 }
 
-function sandboxHelp(agent: AgentInfo, action: "on" | "off"): never {
+function sandboxHelp(agent: AgentInfo, action: "on" | "off" | "hush"): never {
   const what = action === "on" ? "読み上げを開始できません" : "読み上げを止められません"
   if (agent.kind === "claude") {
     fail(
@@ -225,6 +225,19 @@ async function off() {
   print("このセッションの読み上げを OFF にしました。")
 }
 
+// Runs outside any agent session too, so a global keyboard shortcut can call it.
+// Watchers poll the file's mtime; no signal is sent, so a watcher that predates hush is left alone.
+function hush() {
+  if (!stateWritable()) {
+    const agent = detectAgent()
+    if (agent) sandboxHelp(agent, "hush")
+    fail(EXIT_ERROR, `${stateDir()} に書き込めません。`)
+  }
+  fs.writeFileSync(hushPath(), String(Date.now()), { mode: 0o600 })
+  const n = liveSessions().length
+  print(n ? `読み上げを止めました（ON のセッション ${n} 件）。読み上げは ON のままです。` : "読み上げが ON のセッションはありません。")
+}
+
 function status() {
   const agent = detectAgent()
   const sessions = liveSessions()
@@ -275,7 +288,7 @@ function doctor() {
   if (checks.some(([, ok]) => !ok)) process.exit(EXIT_PREREQ)
 }
 
-const commands: Record<string, () => unknown> = { on, off, status, doctor }
+const commands: Record<string, () => unknown> = { on, off, hush, status, doctor }
 const cmd = commands[process.argv[2] ?? ""]
-if (!cmd) fail(EXIT_PREREQ, "usage: bun talkback.ts on | off | status | doctor")
+if (!cmd) fail(EXIT_PREREQ, "usage: bun talkback.ts on | off | hush | status | doctor")
 await cmd()

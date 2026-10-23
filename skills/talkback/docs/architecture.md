@@ -37,7 +37,8 @@ skills/talkback/
 ├── docs/                 # 保守する人向けの文書（この文書と decisions.md）
 ├── agents/openai.yaml    # Codex 向けの表示用メタデータ
 ├── scripts/
-│   ├── talkback.ts         # CLI: on | off | status | doctor
+│   ├── talkback.ts         # CLI: on | off | hush | status | doctor
+│   ├── raycast/hush.sh     # キーボードショートカットから hush を呼ぶスクリプト
 │   ├── watcher.ts          # セッションごとの監視プロセス
 │   ├── dev/build-dict.ts   # kanalizer-dataset を TSV に変換する（開発者用）
 │   └── lib/
@@ -62,6 +63,7 @@ skills/talkback/
 ├── play.lock                       # 再生ロック
 ├── waiting/<session-id>            # ロック待ちの目印
 ├── last-speaker                    # 最後に話したセッション（名前を読むかの判定）
+├── hush                            # hush の合図。更新時刻だけを使う
 └── logs/<session-id>.log           # 本文は書かない。1 MB を超えたら空にする
 
 $TMPDIR/talkback-<session-id>-XXXXXX/  # 合成した WAV。再生後と終了時に消す
@@ -113,6 +115,10 @@ sequenceDiagram
 
 `off` は、状態ファイルの監視プロセスのプロセスグループに `SIGTERM` を送る。グループごと送るので、合成中の `say` と再生中の `afplay` も止まる。3 秒たっても止まらなければ `SIGKILL` を送る。送る前に、PID と起動時刻が記録と一致し、コマンドラインに `watcher.ts` が含まれることを確かめる。セッション ID は照合しない。resume のあとも、監視プロセスのコマンドラインには起動時のセッション ID が残るからである。
 
+`hush` は、状態ディレクトリの `hush` ファイルを書き換える。監視プロセスは 250 ms ごとにこのファイルの更新時刻を確かめ、新しくなっていれば、`interrupt` と同じく今の発話を止めて未読分を捨て、ON のまま次の文を待つ。シグナルを使わないのは、受け取る処理を登録していない Bun のプロセスが `SIGUSR1` で終了してしまうからである。シグナルにすると、`hush` を知らない古い監視プロセスや、起動直後の監視プロセスが、読み上げごと止まってしまう。エージェントの環境変数を使わないので、キーボードショートカットのようにセッションの外から実行できる。Claude Code のデスクトップアプリでは Esc での中断が transcript に記録されないことがあるので、読み上げだけを止める手段として用意した。手元の transcript では、中断の行は CLI で 46 件、デスクトップアプリで 2 件だった。
+
+`raycast/hush.sh` は、`talkback.ts hush` を呼ぶだけのスクリプトである。ショートカットを実行するアプリは最小限の PATH で起動するので、Bun の場所をよくあるインストール先から探す。
+
 CLI の終了コードは、0 が成功、1 が実行時エラー、2 が前提条件の不足（直し方を出力する）である。
 
 ## エージェントと transcript の特定
@@ -137,7 +143,7 @@ stateDiagram-v2
   [*] --> 監視中: talkback on
   監視中 --> 読み上げ中: message / question
   読み上げ中 --> 監視中: 読み終えた
-  読み上げ中 --> 監視中: interrupt<br/>（発話を止め未読分を捨てる）
+  読み上げ中 --> 監視中: interrupt / hush<br/>（発話を止め未読分を捨てる）
   監視中 --> 監視中: continuedIn<br/>（移り先のファイルに切り替え）
   監視中 --> [*]: talkback off（SIGTERM）
   読み上げ中 --> [*]: talkback off（SIGTERM）
