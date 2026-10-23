@@ -1,40 +1,28 @@
 import { describe, expect, test } from "bun:test"
 import { ClaudeAdapter } from "../scripts/lib/adapters/claude"
 import { CodexAdapter } from "../scripts/lib/adapters/codex"
-import { PENDING_TIMEOUT_MS, type Adapter, type AgentEvent } from "../scripts/lib/adapters/types"
+import type { Adapter, AgentEvent } from "../scripts/lib/adapters/types"
 import { claude } from "./helpers"
 
-function feed(adapter: Adapter, lines: unknown[], now = 0): AgentEvent[] {
-  return lines.flatMap((l) => adapter.push(l, now))
+function feed(adapter: Adapter, lines: unknown[]): AgentEvent[] {
+  return lines.flatMap((l) => adapter.push(l))
 }
 
 describe("Claude Code transcript", () => {
-  test("text before an ordinary tool call is intermediate, the end_turn text is final", () => {
+  test("text blocks are messages as soon as they arrive, whatever follows; tool calls and results are silent", () => {
     const a = new ClaudeAdapter()
     expect(feed(a, [claude.text("m1", "調べます。", "tool_use"), claude.tool("m1", "Bash"), claude.toolResult(), claude.text("m2", "終わりました。", "end_turn")])).toEqual([
-      { type: "message", text: "調べます。", kind: "intermediate" },
-      { type: "message", text: "終わりました。", kind: "final" },
+      { type: "message", text: "調べます。" },
+      { type: "message", text: "終わりました。" },
     ])
   })
 
-  test("text before AskUserQuestion is final and the questions follow", () => {
-    const a = new ClaudeAdapter()
+  test("AskUserQuestion is read as its question texts, without the options", () => {
     const input = { questions: [{ question: "どれにしますか？", options: [{ label: "A" }] }] }
-    expect(feed(a, [claude.text("m1", "論点です。", "tool_use"), claude.tool("m1", "AskUserQuestion", input)])).toEqual([
-      { type: "message", text: "論点です。", kind: "final" },
+    expect(feed(new ClaudeAdapter(), [claude.text("m1", "論点です。", "tool_use"), claude.tool("m1", "AskUserQuestion", input)])).toEqual([
+      { type: "message", text: "論点です。" },
       { type: "question", texts: ["どれにしますか？"] },
     ])
-  })
-
-  test("held text is released as intermediate when no tool call follows in time", () => {
-    const a = new ClaudeAdapter()
-    expect(feed(a, [claude.text("m1", "調べます。", "tool_use")])).toEqual([])
-    expect(a.flush(PENDING_TIMEOUT_MS - 1)).toEqual([])
-    expect(a.flush(PENDING_TIMEOUT_MS)).toEqual([{ type: "message", text: "調べます。", kind: "intermediate" }])
-  })
-
-  test("stop reasons other than tool_use are final", () => {
-    expect(feed(new ClaudeAdapter(), [claude.text("m1", "途中で切れた", "max_tokens")])).toEqual([{ type: "message", text: "途中で切れた", kind: "final" }])
   })
 
   test.each([
@@ -71,30 +59,21 @@ describe("Codex rollout", () => {
   const agent = (message: string, phase?: string) => ({ type: "event_msg", payload: { type: "agent_message", message, ...(phase ? { phase } : {}) } })
   const call = (name: string, args: unknown = {}) => ({ type: "response_item", payload: { type: "function_call", name, arguments: JSON.stringify(args) } })
 
-  test("commentary before a tool call is intermediate, final_answer is final, response_item messages are not repeated", () => {
-    const a = new CodexAdapter()
+  // Codex Desktop writes no phase, so phase must not decide whether a message is read.
+  test("agent messages are read with or without phase, and response_item copies are not repeated", () => {
     const dup = { type: "response_item", payload: { type: "message", role: "assistant", content: [] } }
-    expect(feed(a, [agent("調べます。", "commentary"), dup, call("exec_command"), agent("終わりました。", "final_answer"), dup])).toEqual([
-      { type: "message", text: "調べます。", kind: "intermediate" },
-      { type: "message", text: "終わりました。", kind: "final" },
+    expect(feed(new CodexAdapter(), [agent("調べます。", "commentary"), dup, call("exec_command"), agent("直しました。"), dup, agent("終わりました。", "final_answer")])).toEqual([
+      { type: "message", text: "調べます。" },
+      { type: "message", text: "直しました。" },
+      { type: "message", text: "終わりました。" },
     ])
   })
 
-  test("commentary before request_user_input is final and the questions follow", () => {
-    const a = new CodexAdapter()
-    expect(feed(a, [agent("確認させてください。", "commentary"), call("request_user_input", { questions: [{ id: "q", question: "進めますか？" }] })])).toEqual([
-      { type: "message", text: "確認させてください。", kind: "final" },
+  test("request_user_input is read as its question texts", () => {
+    expect(feed(new CodexAdapter(), [agent("確認させてください。", "commentary"), call("request_user_input", { questions: [{ id: "q", question: "進めますか？" }] })])).toEqual([
+      { type: "message", text: "確認させてください。" },
       { type: "question", texts: ["進めますか？"] },
     ])
-  })
-
-  // Codex Desktop writes no phase; only the message right before task_complete is the final answer.
-  test("without phase, the message before task_complete is final and earlier ones are intermediate", () => {
-    const a = new CodexAdapter()
-    const complete = { type: "event_msg", payload: { type: "task_complete" } }
-    expect(feed(a, [agent("調べます。"), agent("直しました。")], 0)).toEqual([{ type: "message", text: "調べます。", kind: "intermediate" }])
-    expect(a.flush(60_000)).toEqual([])
-    expect(feed(a, [complete])).toEqual([{ type: "message", text: "直しました。", kind: "final" }])
   })
 
   const event = (payload: unknown) => ({ type: "event_msg", payload })

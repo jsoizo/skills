@@ -10,7 +10,7 @@ import { lastSpeakerPath, playLockPath, sessionLogPath, waitingDir } from "./lib
 import { isAlive, procRef } from "./lib/proc"
 import { loadDictionaries, SayReadingProfile } from "./lib/reading"
 import { liveSessions, readState, removeState, writeState, type SessionState } from "./lib/state"
-import { cleanup, messageToSpeech, questionToSpeech } from "./lib/text"
+import { cleanup, markdownToSpeech, questionToSpeech } from "./lib/text"
 
 const TAIL_POLL_MS = 250
 const LIVENESS_POLL_MS = 2000
@@ -128,7 +128,7 @@ async function speak(text: string, signal: AbortSignal) {
 function handle(ev: AgentEvent) {
   switch (ev.type) {
     case "message":
-      return enqueue(messageToSpeech(ev.text, ev.kind))
+      return enqueue(markdownToSpeech(ev.text))
     case "question":
       return enqueue(questionToSpeech(ev.texts))
     case "interrupt":
@@ -182,10 +182,9 @@ function readNew() {
       log(`skip unparsable line (${line.length} chars)`)
       continue
     }
-    for (const ev of adapter.push(parsed, Date.now())) handle(ev)
+    for (const ev of adapter.push(parsed)) handle(ev)
     if (switchTo) return trySwitch()
   }
-  for (const ev of adapter.flush(Date.now())) handle(ev)
 }
 
 // The continued transcript starts with a copy of the history under the new session ID, so read it from its end.

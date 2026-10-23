@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
-import { messageToSpeech, questionToSpeech } from "../scripts/lib/text"
+import { markdownToSpeech, questionToSpeech } from "../scripts/lib/text"
 
-describe("what a final reply sounds like", () => {
+describe("what a message sounds like", () => {
   test.each([
     ["fenced code becomes its language and line count", "前文。\n\n```ts\nconst a = 1\nconst b = 2\n```", "前文。\nTypeScript のコード 2 行。"],
     ["code without a language", "```\nls\n```", "コード 1 行。"],
@@ -22,18 +22,8 @@ describe("what a final reply sounds like", () => {
     ["inline HTML tags are dropped", "a <br> b", "a  b。"],
     ["emoji are removed", "完了しました 🎉✅", "完了しました。"],
   ])("%s", (_name, md, spoken) => {
-    expect(messageToSpeech(md, "final")).toBe(spoken)
+    expect(markdownToSpeech(md)).toBe(spoken)
   })
-})
-
-test.each([
-  ["the first sentence", "テストを実行します。失敗したら直します。", "テストを実行します。"],
-  ["the first line when unpunctuated", "1 行目\n2 行目", "1 行目。"],
-  ["prose after a leading heading and code block", "## 計画\n\n```ts\na\n```\n\nまず直します。次に試します。", "まず直します。"],
-  ["a list item when there is no paragraph", "- 一つ目です。続き\n- 二つ目", "一つ目です。"],
-  ["the summary when there is no prose", "```sh\nls\n```", "シェル のコード 1 行。"],
-])("an intermediate message is cut to %s", (_name, md, spoken) => {
-  expect(messageToSpeech(md, "intermediate")).toBe(spoken)
 })
 
 test("questions are announced, then read without options", () => {

@@ -31,7 +31,7 @@
 | --- | --- |
 | 入力元 | 両エージェントとも、セッションの transcript（JSONL）を監視する。hook は使わない |
 | 粒度 | assistant のメッセージ単位。ツール呼び出しの合間に出るテキストブロックと、最終応答が対象になる |
-| 中間メッセージ | 最初の 1 文だけ読む |
+| 中間メッセージ | 全文を読む |
 | 最終応答 | 全文を読む |
 | 質問で終わる turn | 質問（Claude Code の `AskUserQuestion` など）の直前の説明文を最終応答として全文読み、続けて質問文を読む。選択肢は読まない |
 | ON/OFF の操作 | ユーザーがスキルを呼ぶと、モデルが `talkback.ts on` / `off` を実行する。プロンプトを横取りする hook は使わない |
@@ -174,18 +174,18 @@ PID は、取り違えを防ぐため、常に起動時刻（`ps -o lstart=`）�
 
 ### エージェント別アダプタ
 
-アダプタは transcript の行をイベントに変換する。イベントは `message(text, kind)`、`question(texts)`、`interrupt` の 3 種類で、`kind` は `intermediate`（中間）か `final`（最終）である。
+アダプタは transcript の行をイベントに変換する。イベントは `message(text)`、`question(texts)`、`interrupt`、`continuedIn(sessionId)` の 4 種類である。中間メッセージも最終応答も同じく全文を読むので、両者を区別しない。本文は届いた時点ですぐに `message` として出す。
 
-**Claude Code** の transcript は `~/.claude/projects/<project-slug>/<session-id>.jsonl` にある。content block ごとに 1 行ずつ書かれる。同じメッセージの行には、どれも同じ `message.stop_reason` が入っている。
+**Claude Code** の transcript は `~/.claude/projects/<project-slug>/<session-id>.jsonl` にある。content block ごとに 1 行ずつ書かれる。
 
 | 行 | イベント |
 | --- | --- |
-| `type: "assistant"`、content block が `text`、`message.stop_reason: "tool_use"` | `message(…, intermediate)`（下の保留を参照） |
-| `type: "assistant"`、content block が `text`、`message.stop_reason` が `tool_use` 以外（`end_turn`、`stop_sequence`、`null`、未知の値など） | `message(…, final)` |
+| `type: "assistant"`、content block が `text` | `message` |
 | `type: "assistant"`、content block が `tool_use` で `name: "AskUserQuestion"` | `question(input.questions[].question)` |
 | `type: "user"` で、ユーザーが入力したプロンプト（判定は下を参照） | `interrupt` |
 | `type: "user"` で、本文が `[Request interrupted by user` で始まる | `interrupt` |
 | `type: "attachment"`、`attachment.type: "queued_command"`、`attachment.origin.kind: "human"`（作業中に入力して待たせているプロンプト） | `interrupt` |
+| `type: "continued-in"` | `continuedIn(continuedInSessionId)` |
 | `isSidechain: true` の行 | 無視する |
 
 ユーザーが入力したプロンプトの判定:
@@ -196,33 +196,22 @@ PID は、取り違えを防ぐため、常に起動時刻（`ps -o lstart=`）�
 - `origin.kind` がなく `promptSource` があれば、`typed`、`queued`、`suggestion_accepted`、`sdk` の行だけをプロンプトとする。
 - どちらのキーもない古い形式の行は、`isMeta` が真でなく、本文が文字列で、`<` で始まらないものをプロンプトとする。
 
-`stop_reason: "tool_use"` の `text` の行は、すぐには `intermediate` にしない。同じ `message.id` の次の行が届くまで保留する。
-
-- 次の行が `AskUserQuestion` の `tool_use` なら、保留していた文を `message(…, final)` として出し、続けて `question` を出す。
-- 次の行がそれ以外の `tool_use` なら、`message(…, intermediate)` として出す。
-- 1 秒待っても次の行が届かなければ、`message(…, intermediate)` として出す。
-
-`text` の行と `tool_use` の行は続けて書かれることを手元の transcript で確認しているので、保留による遅れは小さいと見込む。
-
 subagent の出力は、本体とは別のファイル（`<session-id>/subagents/`）に書かれる。手元の本体のファイルには `isSidechain: true` の行はなかったが、古い形式に備えて無視する規則は残す。
 
 **Codex** の transcript は `~/.codex/sessions/YYYY/MM/DD/rollout-*-<thread-id>.jsonl` にある。
 
 | 行 | イベント |
 | --- | --- |
-| `type: "event_msg"`、`payload.type: "agent_message"`、`payload.phase: "commentary"` | `message(…, intermediate)` |
-| `type: "event_msg"`、`payload.type: "agent_message"`、`payload.phase: "final_answer"` | `message(…, final)` |
-| `type: "event_msg"`、`payload.type: "agent_message"`、`payload.phase` がない | 保留する（下を参照） |
+| `type: "event_msg"`、`payload.type: "agent_message"`（`phase` の有無と値は問わない） | `message` |
+| `type: "response_item"`、`payload.type: "function_call"`、`payload.name: "request_user_input"` | `question`（引数の JSON の `questions[].question`） |
 | `type: "event_msg"`、`payload.type: "user_message"` で、本文が `<` で始まらない | `interrupt` |
 | `type: "event_msg"`、`payload.type: "turn_aborted"` | `interrupt` |
 
-`phase` のない `agent_message` は保留する。`task_complete` が届けば `final`、次の `agent_message` かツール呼び出しが届けば `intermediate` として出す。それ以外のイベント（`token_count` など）では判定しない。最終応答と `task_complete` の間には、`token_count` が入ることがあるからである。時間切れでの判定もしない。手元の rollout では、Codex のデスクトップアプリ（`Codex Desktop 0.128.0-alpha.1`）が `phase` を書いていなかった。CLI（codex-tui 0.128.0〜0.133.0）では、`final_answer` の直後に必ず `task_complete` が続いていた。
+`phase` で読むかどうかを決めない。手元の rollout では、Codex のデスクトップアプリ（`Codex Desktop 0.128.0-alpha.1`）が `phase` を書いていなかったからである。
 
 `user_message` のうち `<` で始まるもの（`<task-notification>`、`<command-name>` など）は、ユーザーの入力ではないので無視する。
 
 `response_item` の行には同じメッセージが重複して入るので、無視する。手元では、`response_item` と `event_msg` の件数が一致しないファイルもあった。`event_msg` だけを使う方針で、取りこぼしが出うることは許容する。
-
-Codex でユーザーに入力を求めるツール（`request_user_input` など）が transcript にどう書かれるかは、まだ確認していない。確認するまで、Codex のアダプタは `question` を出さない。
 
 subagent のスレッドは別の rollout（`source: subagent`）に書かれるので、親のファイルの監視には混ざらない。
 
@@ -251,9 +240,8 @@ subagent のスレッドは別の rollout（`source: subagent`）に書かれる
    - 地の文のパスも、ファイル名だけにする（`src/components/Button.tsx` → `Button.tsx`）。
    - 絵文字を消す。
    - `[[` と `]]` を消す。`say` は `[[volm 0]]` のような文字列を、音量や速度を変える埋め込みコマンドとして解釈するからである。標準入力で渡しても、この解釈は防げない（実機で確認した）。絵文字を先に消すのは、`[🎉[` のように絵文字を挟んだ `[[` を残さないためである。
-4. 中間メッセージは、最初の段落の最初の 1 文だけを残す。段落がなく、コードブロックや表から始まる場合は、最初の置き換え文言（「TypeScript のコード 12 行」など）を読む。文の区切りは「。」「！」「？」「!」「?」と改行である。
-5. `question` は、質問が 1 つなら「質問です。」、複数なら「質問が N つあります。」と読んでから、各質問文を順に読む。質問文も 1〜3 と同じ変換にかける。選択肢は読まない。
-6. [英語 → カタカナ](#英語--カタカナ) に渡す。
+4. `question` は、質問が 1 つなら「質問です。」、複数なら「質問が N つあります。」と読んでから、各質問文を順に読む。質問文も 1〜3 と同じ変換にかける。選択肢は読まない。
+5. [英語 → カタカナ](#英語--カタカナ) に渡す。
 
 パスとみなすのは、`/` を含む空白のない文字列のうち、次のどちらかに当たるものである。`ON/OFF`、`TODO/FIXME`、`2026/10/23` のような語を、パスとして縮めないためである。
 
@@ -410,7 +398,7 @@ MVP は `say` だけに対応する。ただし、後から VOICEVOX などの�
 
 | 層 | 内容 | エンジンへの依存 |
 | --- | --- | --- |
-| 1. テキスト整形 | Markdown を読み上げ用の文に変える。コードと表の要約、パスの短縮、中間メッセージの 1 文化 | なし |
+| 1. テキスト整形 | Markdown を読み上げ用の文に変える。コードと表の要約、パスの短縮 | なし |
 | 2. 読みの解決 | 英語の読みを決め、区間に分ける。上書き表、辞書、フォールバックの声 | あり |
 | 3. 合成 | 区間を音声データにし、つないで再生する | あり |
 

@@ -53,7 +53,7 @@ describe("Claude Code session", () => {
     ])
     await waitFor(() => spoken(s.home).length >= 3, 15000, "three utterances")
     // The project name has no katakana reading, so it goes to the English voice.
-    expect(spoken(s.home)).toEqual(["proj。", "調べます。", "ユーズエフェクト を直しました。"])
+    expect(spoken(s.home)).toEqual(["proj。", "調べます。\n詳しく見ます。", "ユーズエフェクト を直しました。"])
 
     expect(runCli(["status"], s.env).stdout).toContain("このセッション: ON")
     const pid = watcherPid(s.home)
@@ -154,7 +154,7 @@ describe("Codex session", () => {
       agentMsg("直しました。", "final_answer"),
     ])
     await waitFor(() => spoken(s.home).length >= 2, 15000, "two utterances")
-    expect(spoken(s.home)).toEqual(["確認します。", "直しました。"])
+    expect(spoken(s.home)).toEqual(["確認します。\nそのあと直します。", "直しました。"])
 
     const pid = watcherPid(s.home)
     codex.kill("SIGKILL")
