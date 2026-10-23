@@ -1,0 +1,6 @@
+interface:
+  display_name: "Talkback"
+  short_description: "このセッションの返答を音声で読み上げる（ON/OFF）"
+  default_prompt: "$talkback を使って、このセッションの読み上げを ON にしてください。"
+policy:
+  allow_implicit_invocation: false
