@@ -190,6 +190,7 @@ PID は、取り違えを防ぐため、常に起動時刻（`ps -o lstart=`）�
 
 ユーザーが入力したプロンプトの判定:
 
+- 本文が `<bash-input>`、`<bash-stdout>`、`<bash-stderr>`、`<local-command-stdout>`、`<local-command-stderr>`、`<local-command-caveat>` で始まる行は、`origin.kind` が `"human"` でもプロンプトとしない。`!` で実行したシェルコマンドやローカルコマンドの出力で、エージェントへの指示ではないからである（`!code .` で読み上げが途中で切れたことを実際に観測した）。ユーザーが入力したスラッシュコマンド（`<command-message>` で始まる行）は、新しい指示としてプロンプトに含める。
 - `type: "user"` の行には、ユーザーの入力以外も含まれる。手元の transcript では、subagent やタスクの完了通知（`<task-notification>`）、スラッシュコマンドの展開（`<command-name>`）、`<system-reminder>`、`!` コマンドの入出力（`<bash-input>`、`<bash-stdout>`）、`tool_result` を確認した。これらで割り込むと、バックグラウンドの作業が終わるたびに読み上げが止まる。
 - `origin.kind` があれば、`"human"` の行だけをプロンプトとする。
 - `origin.kind` がなく `promptSource` があれば、`typed`、`queued`、`suggestion_accepted`、`sdk` の行だけをプロンプトとする。

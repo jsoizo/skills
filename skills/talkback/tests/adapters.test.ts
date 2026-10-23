@@ -44,6 +44,10 @@ describe("Claude Code transcript", () => {
     ["a prompt typed in the old format", claude.user("次へ"), true],
     ["a line from another session", claude.user("hello", { origin: { kind: "peer" } }), false],
     ["a line the user wrote", claude.user("<b>太字</b>で", { origin: { kind: "human" } }), true],
+    // Regression: running `!code .` cut off the reply being read.
+    ["a shell command run with !", claude.user("<bash-input>code .</bash-input><bash-stdout></bash-stdout>", { origin: { kind: "human" }, promptSource: "sdk" }), false],
+    ["local command output", claude.user("<local-command-stdout>Set model</local-command-stdout>", { origin: { kind: "human" } }), false],
+    ["a slash command the user typed", claude.user("<command-message>review</command-message>\n<command-name>/review</command-name>", { origin: { kind: "human" } }), true],
     ["a queued prompt", claude.user("次へ", { promptSource: "queued" }), true],
     ["an automatic continuation", claude.user("続けて", { promptSource: "auto-continuation" }), false],
     ["an Esc interruption", { type: "user", message: { role: "user", content: [{ type: "text", text: "[Request interrupted by user]" }] } }, true],

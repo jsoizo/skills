@@ -3,6 +3,8 @@ import { isRecord, looksInjected, PendingText, questionTexts, type Adapter, type
 const QUESTION_TOOLS = new Set(["AskUserQuestion"])
 const TYPED_SOURCES = new Set(["typed", "queued", "suggestion_accepted", "sdk"])
 const INTERRUPTED = "[Request interrupted by user"
+// `!` shell commands and local command output are written as the user's turn but are not instructions to the agent.
+const NOT_AN_INSTRUCTION = /^\s*<(?:bash-input|bash-stdout|bash-stderr|local-command-stdout|local-command-stderr|local-command-caveat)>/
 
 export class ClaudeAdapter implements Adapter {
   private pending = new PendingText()
@@ -30,7 +32,7 @@ export class ClaudeAdapter implements Adapter {
     const text = userText(line.message?.content)
     if (text === null) return []
     const interrupted = text.startsWith(INTERRUPTED)
-    if (!interrupted && !typedByUser(line, text)) return []
+    if (!interrupted && (NOT_AN_INSTRUCTION.test(text) || !typedByUser(line, text))) return []
     this.pending.drop()
     return [{ type: "interrupt" }]
   }
