@@ -85,6 +85,10 @@
   .slider { --pos: 50%; flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; height: 20px; background: transparent; cursor: ew-resize; }
   .slider::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--warn) var(--pos), var(--accent) var(--pos)); }
   .slider::-moz-range-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--warn) var(--pos), var(--accent) var(--pos)); }
+  /* Blending has no area to split, so the track only shows that the knob's side gets stronger */
+  .mix-bar { width: min(400px, 100%); }
+  .slider.mix::-webkit-slider-runnable-track { background: linear-gradient(to right, var(--warn), var(--accent)); }
+  .slider.mix::-moz-range-track { background: linear-gradient(to right, var(--warn), var(--accent)); }
   .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 50%; background: var(--panel); border: 2px solid var(--text); }
   .slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--panel); border: 2px solid var(--text); }
   .side-tag { flex-shrink: 0; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 4px; white-space: nowrap; }
@@ -116,7 +120,7 @@
         <option value="1" selected>100%</option><option value="2">200%</option>
       </select>
     </label>
-    <label id="opacityRow" for="opacity"><span id="opacityLabel"></span> <input type="range" id="opacity" min="0" max="100" value="50" /></label>
+    <div id="opacityRow" class="slide-bar mix-bar"><span class="side-tag tag-a" id="mixA"></span><input type="range" id="opacity" class="slider mix" min="0" max="100" value="50" /><span class="side-tag tag-b" id="mixB"></span></div>
     <span class="hint" id="keysHint"></span>
   </div>
 
@@ -136,21 +140,23 @@
   const I18N = {
     en: {
       modes: { side: "Side by side", slide: "Slide", overlay: "Overlay", blink: "Blink", diff: "Diff" },
-      zoom: "Zoom", opacity: "Opacity of", keys: "j / k (or ↑↓ in the list) move between images, 1–5 switch view",
+      zoom: "Zoom", mixAria: `Blend of ${DATA.labels.a} and ${DATA.labels.b}`, keys: "j / k (or ↑↓ in the list) move between images, 1–5 switch view",
       status: { same: "No diff", changed: (amount) => amount, size: "Size differs", "only-a": (l) => `Only in ${l}`, "only-b": (l) => `Only in ${l}` },
       summaryAll: (n) => `All ${n} images match`, summaryCount: (n, k) => `${k} of ${n} differ`,
       changedN: (n) => `${n} changed`, sizeN: (n) => `${n} size differs`, onlyN: (n) => `${n} only on one side`,
-      diffCap: (amount) => `Diff (differing pixels in red, ${amount})`, under: "Bottom", over: "Top", link: "Open source",
+      diffCap: (amount) => `Diff (differing pixels in red, ${amount})`, link: "Open source",
+      mixRatio: (p) => `Blend: ${A} ${100 - p}% / ${B} ${p}%`,
       slideRatio: (p) => `Left ${p}%: ${A} / right ${100 - p}%: ${B}`,
       size: "Size", missing: (l) => `No image in ${l}`, toolbar: "View", nav: "Images", ungrouped: "Images", empty: "No images to compare",
     },
     ja: {
       modes: { side: "左右", slide: "スライド", overlay: "重ねる", blink: "点滅", diff: "差分" },
-      zoom: "倍率", opacity: "透明度", keys: "j / k（一覧では ↑↓）で画像を移動、1〜5 で表示を切り替え",
+      zoom: "倍率", mixAria: `${DATA.labels.a}と${DATA.labels.b}を混ぜる割合`, keys: "j / k（一覧では ↑↓）で画像を移動、1〜5 で表示を切り替え",
       status: { same: "差なし", changed: (amount) => amount, size: "大きさが違う", "only-a": (l) => `${l}のみ`, "only-b": (l) => `${l}のみ` },
       summaryAll: (n) => `${n} 枚すべて画素の差なし`, summaryCount: (n, k) => `${n} 枚中 ${k} 枚に差あり`,
       changedN: (n) => `画素の差 ${n} 枚`, sizeN: (n) => `大きさが違う ${n} 枚`, onlyN: (n) => `片方のみ ${n} 枚`,
-      diffCap: (amount) => `差分（違う画素を赤で表示、${amount}）`, under: "下", over: "上", link: "元を開く",
+      diffCap: (amount) => `差分（違う画素を赤で表示、${amount}）`, link: "元を開く",
+      mixRatio: (p) => `混ぜる割合：${A} ${100 - p}% ／ ${B} ${p}%`,
       slideRatio: (p) => `左 ${p}%：${A} ／ 右 ${100 - p}%：${B}`,
       size: "大きさ", missing: (l) => `${l}に画像がありません`, toolbar: "表示の切り替え", nav: "画像の一覧", ungrouped: "画像", empty: "比べる画像がありません",
     },
@@ -166,6 +172,9 @@
   $("pageTitle").textContent = DATA.title
   $("lead").textContent = DATA.description || ""
   $("zoomLabel").textContent = T.zoom
+  $("mixA").textContent = A
+  $("mixB").textContent = B
+  $("opacity").setAttribute("aria-label", T.mixAria)
   $("keysHint").textContent = T.keys
   $("toolbar").setAttribute("aria-label", T.toolbar)
   $("nav").setAttribute("aria-label", T.nav)
@@ -273,7 +282,6 @@
     document.querySelectorAll("#modes button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)))
     navButtons.forEach((b, i) => b.setAttribute("aria-current", String(i === index)))
     $("opacityRow").hidden = mode !== "overlay"
-    $("opacityLabel").textContent = `${T.opacity}${DATA.lang === "ja" ? `（${B}）` : ` ${B}`}`
 
     const stage = $("stage")
     stage.replaceChildren()
@@ -318,7 +326,7 @@
       const { el, top } = stack(it.a, it.b)
       if (mode === "overlay") {
         top.style.opacity = Number($("opacity").value) / 100
-        stage.append(caption(`${T.under}: ${A} ／ ${T.over}: ${B}（${$("opacity").value}%）`), el)
+        stage.append(caption(T.mixRatio(Number($("opacity").value))), el)
       } else {
         const cap = caption(A)
         let on = false
