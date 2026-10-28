@@ -80,7 +80,19 @@
   .stack { position: relative; }
   .stack img { position: absolute; left: 0; top: 0; }
   .stage img { display: block; max-width: none; box-shadow: 0 0 0 1px var(--border); }
-  .slider { width: min(480px, 100%); }
+  .slide-bar { display: flex; align-items: center; gap: 8px; width: min(560px, 100%); }
+  /* The track shows how much of the image each side covers, in the same colors as the side tags */
+  .slider { --pos: 50%; flex: 1; min-width: 0; -webkit-appearance: none; appearance: none; height: 20px; background: transparent; cursor: ew-resize; }
+  .slider::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--warn) var(--pos), var(--accent) var(--pos)); }
+  .slider::-moz-range-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--warn) var(--pos), var(--accent) var(--pos)); }
+  .slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 50%; background: var(--panel); border: 2px solid var(--text); }
+  .slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--panel); border: 2px solid var(--text); }
+  .side-tag { flex-shrink: 0; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 4px; white-space: nowrap; }
+  .tag-a { background: var(--warn-bg); color: var(--warn); }
+  .tag-b { background: var(--accent-bg); color: var(--accent); }
+  .slide-ratio { font-size: 12px; color: var(--sub); font-variant-numeric: tabular-nums; }
+  /* Outlined so the line stays visible on both light and dark screenshots */
+  .split { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--text); box-shadow: 0 0 0 1px var(--panel); pointer-events: none; }
 
   @media (max-width: 760px) {
     .layout { grid-template-columns: minmax(0, 1fr); }
@@ -129,6 +141,7 @@
       summaryAll: (n) => `All ${n} images match`, summaryCount: (n, k) => `${k} of ${n} differ`,
       changedN: (n) => `${n} changed`, sizeN: (n) => `${n} size differs`, onlyN: (n) => `${n} only on one side`,
       diffCap: (amount) => `Diff (differing pixels in red, ${amount})`, under: "Bottom", over: "Top", link: "Open source",
+      slideRatio: (p) => `Left ${p}%: ${A} / right ${100 - p}%: ${B}`,
       size: "Size", missing: (l) => `No image in ${l}`, toolbar: "View", nav: "Images", ungrouped: "Images", empty: "No images to compare",
     },
     ja: {
@@ -138,6 +151,7 @@
       summaryAll: (n) => `${n} 枚すべて画素の差なし`, summaryCount: (n, k) => `${n} 枚中 ${k} 枚に差あり`,
       changedN: (n) => `画素の差 ${n} 枚`, sizeN: (n) => `大きさが違う ${n} 枚`, onlyN: (n) => `片方のみ ${n} 枚`,
       diffCap: (amount) => `差分（違う画素を赤で表示、${amount}）`, under: "下", over: "上", link: "元を開く",
+      slideRatio: (p) => `左 ${p}%：${A} ／ 右 ${100 - p}%：${B}`,
       size: "大きさ", missing: (l) => `${l}に画像がありません`, toolbar: "表示の切り替え", nav: "画像の一覧", ungrouped: "画像", empty: "比べる画像がありません",
     },
   }
@@ -280,10 +294,26 @@
       range.type = "range"; range.min = "0"; range.max = "100"; range.value = String(slidePos); range.className = "slider"
       range.setAttribute("aria-label", `${A} / ${B}`)
       const { el, top } = stack(it.b, it.a)
-      const apply = () => { slidePos = Number(range.value); top.style.clipPath = `inset(0 ${100 - slidePos}% 0 0)` }
+      const tag = (cls, text) => { const s = document.createElement("span"); s.className = `side-tag ${cls}`; s.textContent = text; return s }
+      const bar = document.createElement("div")
+      bar.className = "slide-bar"
+      bar.append(tag("tag-a", A), range, tag("tag-b", B))
+      const ratio = caption("")
+      ratio.classList.add("slide-ratio")
+      // The line follows the clipped edge of the top image, which is the A image's width even when the sizes differ
+      const split = document.createElement("div")
+      split.className = "split"
+      el.appendChild(split)
+      const apply = () => {
+        slidePos = Number(range.value)
+        top.style.clipPath = `inset(0 ${100 - slidePos}% 0 0)`
+        range.style.setProperty("--pos", `${slidePos}%`)
+        split.style.left = `${Math.round(it.a.w * Number($("zoom").value) * slidePos / 100)}px`
+        ratio.textContent = T.slideRatio(slidePos)
+      }
       range.oninput = apply
       apply()
-      stage.append(caption(`← ${A} ｜ ${B} →`), range, el)
+      stage.append(bar, ratio, el)
     } else {
       const { el, top } = stack(it.a, it.b)
       if (mode === "overlay") {
