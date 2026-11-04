@@ -37,7 +37,7 @@ skills/talkback/
 ├── docs/                 # 保守する人向けの文書（この文書と decisions.md）
 ├── agents/openai.yaml    # Codex 向けの表示用メタデータ
 ├── scripts/
-│   ├── talkback.ts         # CLI: on | off | hush | status | doctor
+│   ├── talkback.ts         # CLI: on [--full] | off | brief | full | hush | status | doctor
 │   ├── raycast/hush.sh     # キーボードショートカットから hush を呼ぶスクリプト
 │   ├── watcher.ts          # セッションごとの監視プロセス
 │   ├── dev/build-dict.ts   # kanalizer-dataset を TSV に変換する（開発者用）
@@ -46,6 +46,7 @@ skills/talkback/
 │       ├── text.ts         # 1 層目: Markdown → 読み上げ用の文
 │       ├── reading.ts      # 2 層目: 英語の読みを決め、声の役割ごとの区間に分ける
 │       ├── audio.ts        # 3 層目: 合成、WAV の連結、再生
+│       ├── bargein.ts      # 読み上げ中の入力の検知（barge-in）
 │       ├── lock.ts         # マシン全体の再生ロック
 │       └── agent.ts, proc.ts, state.ts, paths.ts
 ├── tests/                  # bun test。say と afplay は PATH の先頭に置いた偽物で置き換える
@@ -59,7 +60,7 @@ skills/talkback/
 
 ```text
 ~/.local/state/talkback/            # 0700
-├── sessions/<session-id>.json      # 監視プロセスとエージェントの PID・起動時刻、transcript、cwd
+├── sessions/<session-id>.json      # 監視プロセスとエージェントの PID・起動時刻、transcript、cwd、読み方（brief / full）
 ├── play.lock                       # 再生ロック
 ├── waiting/<session-id>            # ロック待ちの目印
 ├── last-speaker                    # 最後に話したセッション（名前を読むかの判定）
@@ -78,6 +79,8 @@ $TMPDIR/talkback-<session-id>-XXXXXX/  # 合成した WAV。再生後と終了�
 - Claude Code では、frontmatter の `allowed-tools` で `talkback.ts` の実行を許可する。ON/OFF のたびに許可を求められないようにするためである。
 - Codex では、コマンドを `bash -lc` などで包まずに実行させる。実行ルールは、コマンドの形で照合されるからである。
 - `agents/openai.yaml` で `allow_implicit_invocation: false` にしている。明示的に頼まれない限り、モデルが読み上げを ON にしないためである。
+
+スキルの本文には、音声用の要約を書く常時の指示もある（[音声用の要約](#音声用の要約)）。
 
 ## ON にしてから読み上げるまで
 
@@ -117,6 +120,8 @@ sequenceDiagram
 
 `hush` は、状態ディレクトリの `hush` ファイルを書き換える。監視プロセスは 250 ms ごとにこのファイルの更新時刻を確かめ、新しくなっていれば、`interrupt` と同じく今の発話を止めて未読分を捨て、ON のまま次の文を待つ。シグナルを使わないのは、受け取る処理を登録していない Bun のプロセスが `SIGUSR1` で終了してしまうからである。シグナルにすると、`hush` を知らない古い監視プロセスや、起動直後の監視プロセスが、読み上げごと止まってしまう。エージェントの環境変数を使わないので、キーボードショートカットのようにセッションの外から実行できる。Claude Code のデスクトップアプリでは Esc での中断が transcript に記録されないことがあるので、読み上げだけを止める手段として用意した。手元の transcript では、中断の行は CLI で 46 件、デスクトップアプリで 2 件だった。
 
+`brief` と `full` は、状態ファイルの読み方を書き換えるだけである。監視プロセスはメッセージが届くたびに状態ファイルを読むので、切り替えは次のメッセージから効く。`on` の既定は `brief` で、`on --full` で全文読みから始める。読み方のない古い状態ファイルは `brief` として扱う。
+
 `raycast/hush.sh` は、`talkback.ts hush` を呼ぶだけのスクリプトである。ショートカットを実行するアプリは最小限の PATH で起動するので、Bun の場所をよくあるインストール先から探す。
 
 CLI の終了コードは、0 が成功、1 が実行時エラー、2 が前提条件の不足（直し方を出力する）である。
@@ -143,7 +148,7 @@ stateDiagram-v2
   [*] --> 監視中: talkback on
   監視中 --> 読み上げ中: message / question
   読み上げ中 --> 監視中: 読み終えた
-  読み上げ中 --> 監視中: interrupt / hush<br/>（発話を止め未読分を捨てる）
+  読み上げ中 --> 監視中: interrupt / hush / barge-in<br/>（発話を止め未読分を捨てる）
   監視中 --> 監視中: continuedIn<br/>（移り先のファイルに切り替え）
   監視中 --> [*]: talkback off（SIGTERM）
   読み上げ中 --> [*]: talkback off（SIGTERM）
@@ -169,8 +174,8 @@ Claude Code は、resume や fork でセッション ID を変え、新しいフ
 
 | イベント | 意味 | 監視プロセスの動き |
 | --- | --- | --- |
-| `message` | assistant が書いた文 | 読み上げの列に並べる |
-| `question` | ユーザーへの質問 | 「質問です。」（複数なら「質問が N つあります。」）と前置きして質問文を読む。選択肢は読まない |
+| `message` | assistant が書いた文。ツールを呼ぶ前の文ではないか（`final`）を持つ | 読む範囲を決めて、読み上げの列に並べる |
+| `question` | ユーザーへの質問 | 「質問です。」（複数なら「質問が N つあります。」）と前置きして質問文を読み、選択肢の見出し（`label`）を続けて読む。説明（`description`）は読まない |
 | `interrupt` | ユーザーの新しい指示、または中断 | 今の発話を止め、未読分を捨てる。ロック待ちもやめる |
 | `continuedIn` | transcript が別ファイルに移った | 移り先のファイルに切り替える |
 
@@ -180,8 +185,8 @@ Claude Code は、resume や fork でセッション ID を変え、新しいフ
 
 | 行 | イベント |
 | --- | --- |
-| `type: "assistant"`、content block が `text` | `message` |
-| `type: "assistant"`、content block が `tool_use` で `name: "AskUserQuestion"` | `question`（`input.questions[].question`） |
+| `type: "assistant"`、content block が `text` | `message`。`message.stop_reason` が `tool_use` なら `final: false`、それ以外は `final: true` |
+| `type: "assistant"`、content block が `tool_use` で `name: "AskUserQuestion"` | `question`（`input.questions[].question` と `options[].label`） |
 | `type: "user"`（判定は下の図） | `interrupt` または無視 |
 | `type: "attachment"`、`attachment.type: "queued_command"`、`attachment.origin.kind: "human"` | `interrupt`（作業中に入力して待たせているプロンプト） |
 | `type: "continued-in"` | `continuedIn` |
@@ -218,16 +223,48 @@ flowchart TD
 
 | 行 | イベント |
 | --- | --- |
-| `type: "event_msg"`、`payload.type: "agent_message"` | `message` |
-| `type: "response_item"`、`payload.type: "function_call"`、`payload.name: "request_user_input"` | `question`（引数の JSON の `questions[].question`） |
+| `type: "event_msg"`、`payload.type: "agent_message"` | `message`（常に `final: true`） |
+| `type: "response_item"`、`payload.type: "function_call"`、`payload.name: "request_user_input"` | `question`（引数の JSON の `questions[].question`。`options[].label` があれば選択肢として読む。rollout での形はまだ確かめていない） |
 | `type: "event_msg"`、`payload.type: "user_message"` で、本文が `<` で始まらない | `interrupt` |
 | `type: "event_msg"`、`payload.type: "turn_aborted"` | `interrupt` |
 
-- `agent_message` の `phase` は見ない。デスクトップアプリの一部の版が `phase` を書かないからである。
+- `agent_message` の `phase` は見ない。デスクトップアプリの一部の版が `phase` を書かないからである。そのため、ツールを呼ぶ前の文と最終的な返答を区別できず、すべて `final: true` にする。音声用の要約がなければ全文を読むことになる。
 - `response_item` の `message` には、`agent_message` と同じ文が重複して入るので使わない。
 - subagent のスレッドは別の rollout に書かれるので、親のファイルには混ざらない。
 
 アダプタは未知の種類の行を無視する。JSON として解析できない行は、監視プロセスがログに書いて読み飛ばす。形式が変わったときに、監視プロセスが異常終了するのではなく、読み上げが止まるだけで済ませるためである。
+
+## 音声用の要約
+
+`SKILL.md` は、スキルを一度でも使ったセッションで、エージェントに次の 1 行を書かせる。書く場所は、turn を終える返答の末尾と、`AskUserQuestion` や `ExitPlanMode` を呼ぶ直前の文の末尾である。
+
+```markdown
+[voice]: # "設定の読み込み順を直しました。テストを実行してから確認してください。"
+```
+
+- Markdown のリンク参照定義は、CommonMark の仕様で描画されない。Claude Code のデスクトップアプリでは表示されず、transcript には残る。CLI では表示される。
+- 指示は ON/OFF の状態に依存させない。Claude Code は compaction（自動・手動とも）の後、直近に呼んだスキルの本文を `invoked_skills` の添付で付け直すが、モデルが今 ON か OFF かを判断できるとは限らないからである。
+- 要約として読むのは、メッセージの最後の行だけである。コードブロックの中の書式の例を、要約と取り違えないためである。
+- 最後の行が段落の途中にあると、リンク参照定義として解釈されず、Markdown の描画で文字どおり残る。そのため、本文から先に取り除く。
+- 要約の中に `"` が混ざっても、行末の `"` までを要約とする。ラベルの大文字と小文字は区別しない。
+
+### 読む範囲（`messageToSpeech`）
+
+監視プロセスは、`message` を受け取ると、状態ファイルの読み方とイベントの `final` で読む範囲を決める。
+
+```mermaid
+flowchart TD
+  M["message"] --> SP["最後の行が要約なら<br/>本文から取り除く"]
+  SP --> MODE{"読み方"}
+  MODE -->|full| BODY["本文を読む"]
+  MODE -->|brief| V{"要約がある?"}
+  V -->|はい| VOICE["要約を読む"]
+  V -->|いいえ| F{"final?"}
+  F -->|はい| BODY
+  F -->|いいえ| FIRST["本文の最初の 1 文を読む"]
+```
+
+要約も本文と同じ 1〜3 層を通る。要約にインラインコードなどが混ざっても、本文と同じ規則で読む。
 
 ## 文を読み上げ用に変える
 
@@ -356,6 +393,25 @@ sequenceDiagram
 
 割り込みが効くのは、ユーザーの入力や中断が transcript に書かれた時点である。キーを押した時点ではない。
 
+## barge-in
+
+読み上げ中にユーザーが入力を始めたら、`hush` と同じく、すべてのセッションの発話と未読分を止める。Claude Code は、プロンプトを送信するまで transcript に何も書かず、入力の始まりを知らせる hook もない。そのため、transcript の外から検知する。
+
+| きっかけ | 検知の方法 |
+| --- | --- |
+| キー入力 | CoreGraphics の `CGEventSourceSecondsSinceLastEventType`（`kCGEventSourceStateHIDSystemState`、`kCGEventKeyDown`）で、最後にキーが押されてからの秒数を調べる。読み上げを始めた後に押され、そのとき最前面のアプリがエージェントのアプリ（bundle ID の一覧は `bargein.ts`）なら止める |
+| マイク | CoreAudio の `AudioObjectGetPropertyData` で、既定の入力デバイスの `kAudioDevicePropertyDeviceIsRunningSomewhere` を調べる。読み上げ中に「未使用」から「使用中」に変わったら止める |
+
+- どちらも `bun:ffi` で呼ぶ。読み込みに失敗したら barge-in だけを無効にし、読み上げは続ける。`bun:ffi` は Bun の実験的な機能だからである。
+- キー入力は時刻だけを調べ、押したキーは読まない。macOS の「入力監視」の権限が要らない。
+- 最前面のアプリは、新しいキー入力を検知したときにだけ `lsappinfo` で調べ、1 秒間は結果を使い回す。別のアプリで打ち続けているときに、外部コマンドを何度も起動しないためである。
+- 既定の入力デバイスは毎回調べ直す。ユーザーがマイクを切り替えることがあるからである。
+- 入力デバイスが既定の出力デバイスと同じか、出力のストリームを持つ場合（AirPods、USB ヘッドセットなど）は、マイクの検知を使わない。「使用中」はデバイス単位の値なので、自分の `afplay` の再生と区別できないからである。
+- 読み上げを始めた時点でマイクが使用中だった場合（会議中など）は、一度「未使用」に戻るまで反応しない。
+- 監視するのは、再生ロックを持って読み上げている監視プロセスだけで、間隔は 100 ms である。検知したら自分の発話をその場で止め、`hush` ファイルを書き換えてほかのセッションにも知らせる。`hush` ファイルだけで止めると、確認の間隔（250 ms）だけ止まるのが遅れるからである。
+- 止めたセッションが解放したロックを、待っていた別のセッションが `hush` の確認より先に取ることがある。そのため、ロックを取った直後にも `hush` を確かめる。
+- テストでは `TALKBACK_BARGE_IN=off` で無効にする。テストを実行しているマシンの実際のキー入力で、読み上げが止まらないようにするためである。
+
 ## sandbox
 
 `on` と `off` は、最初に sandbox の中で実行されていないかを確かめる。確かめるのは、状態ディレクトリに書き込めるかと、エージェントのプロセスを特定して生存を確認できるかの 2 点である。書き込みだけでは足りない。書き込みを許していても、`ps` や `kill` を拒否する sandbox の構成がありうるからである。
@@ -394,7 +450,7 @@ talkback は、公開されていない形式にいくつも依存している�
 | 切り離したプロセスは、Claude Code の Bash ツールの終了後も残る | デスクトップアプリ |
 | Claude Code の transcript は content block ごとに 1 行書かれる | 手元の transcript を確認 |
 | Claude Code の `type: "user"` の行には、ユーザーの入力以外（`<task-notification>`、`<command-name>`、`<system-reminder>`、`<bash-input>` など）も含まれる。`!` コマンドの行は `origin.kind: "human"` で書かれる | 手元の transcript の構造を集計。`!code .` で読み上げが切れたことも観測した |
-| `AskUserQuestion` は `tool_use` の行として書かれ、質問文は `input.questions[].question` に入る | 手元の transcript を確認 |
+| `AskUserQuestion` は `tool_use` の行として書かれ、質問文は `input.questions[].question`、選択肢の見出しは `options[].label` に入る | 手元の transcript を確認 |
 | resume すると、移り先のファイルは `continued-in` の行の 3〜4 秒後に作られ、先頭に履歴が新しいセッション ID でコピーされる | 手元の transcript 3 件を確認 |
 | Claude Code のデスクトップアプリは、ツールを呼ぶ前に書いた本文を transcript に残さないことが多い（111 件中 20 件だけ残っていた） | この開発のセッションの transcript を集計 |
 | Codex のデスクトップアプリ（`Codex Desktop 0.128.0-alpha.1`）は、`agent_message` に `phase` を書かない | 手元の rollout を確認 |
@@ -403,6 +459,10 @@ talkback は、公開されていない形式にいくつも依存している�
 | Codex の sandbox では、`ps`、sandbox 外のプロセスへの `kill -0`、`~/.local/state` への書き込みが拒否される。`$TMPDIR` への書き込み、transcript の読み取り、`say` はできる | `codex sandbox -c sandbox_mode="workspace-write"`（モデルは使っていない） |
 | `decision = "allow"` の実行ルールに一致したコマンドは、sandbox の外で実行される | codex-cli 0.137.0 のソースと公式ドキュメント |
 | `say` は、標準入力で渡した `[[slnc 2000]]` も埋め込みコマンドとして解釈する | macOS の `say` |
+| Claude Code の transcript では、assistant の行の `message.stop_reason` が、ツールを呼ぶメッセージなら `tool_use` で、本文の行にも入っている。それ以外は多くが `end_turn` だが、`null` や `stop_sequence` もある（`null` はツールを呼ぶ前の文にも現れる） | デスクトップアプリと CLI（`claude -p`）。Claude Code 2.1.312 |
+| Claude Code は、自動・手動の compaction の後、直近に呼んだスキルの本文を `invoked_skills` の添付で付け直す | CLI で手動の `/compact`。自動は公式ドキュメントの記述のみ |
+| Markdown のリンク参照定義は、Claude Code のデスクトップアプリでは表示されず、CLI では表示される | デスクトップアプリと CLI 2.1.312 |
+| `CGEventSourceSecondsSinceLastEventType` は、入力監視の権限なしでキー入力の時刻を返す。`kAudioDevicePropertyDeviceIsRunningSomewhere` は、Claude Code の音声入力を始めて約 0.1 秒で「使用中」になる | `bun:ffi`、Bun 1.3.11、macOS 26 |
 | Bun の `fs.openSync` に `O_EXLOCK \| O_NONBLOCK` を渡すとロックとして働き、保持者を `SIGKILL` で終了させるとロックは解放される | Bun 1.3.11 |
 
 `doctor` は、環境変数からセッションを検出できるか、エージェントのプロセスを確認できるか、transcript の最新の行を解析できるかを確かめる。形式が変わったときに、最初に気づける場所である。

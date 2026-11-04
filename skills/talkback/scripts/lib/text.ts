@@ -1,5 +1,7 @@
 // Layer 1: Markdown → plain text to be spoken. Engine independent.
 
+import type { Question } from "./adapters/types"
+
 const INLINE_CODE_MAX = 20
 
 const LANGUAGE_NAMES: Record<string, string> = {
@@ -125,7 +127,46 @@ export function cleanup(text: string): string {
     .replace(/\[\[|\]\]/g, "")
 }
 
-export function questionToSpeech(texts: string[]): string {
-  const head = texts.length === 1 ? "質問です。" : `質問が ${texts.length} つあります。`
-  return [head, ...texts.map(markdownToSpeech)].join("\n")
+export type ReadingMode = "brief" | "full"
+
+// The agent ends a message with its spoken summary as a link reference definition, which the desktop app does not render.
+// Only the last line counts, so an example inside a code block is never taken for the summary.
+const VOICE_LINE = /^ {0,3}\[voice\]:\s*#\s+"(.*)"[ \t]*$/i
+
+export function splitVoice(md: string): { body: string; voice: string | null } {
+  const lines = md.trimEnd().split("\n")
+  const voice = lines.at(-1)?.match(VOICE_LINE)?.[1].trim()
+  return voice ? { body: lines.slice(0, -1).join("\n"), voice } : { body: md, voice: null }
+}
+
+// A message without a spoken summary is read in full when it ends the turn, so a dropped instruction is noticed.
+export function messageToSpeech(md: string, opts: { final: boolean; mode: ReadingMode }): string {
+  const { body, voice } = splitVoice(md)
+  if (opts.mode === "full") return markdownToSpeech(body)
+  if (voice) return markdownToSpeech(voice)
+  const speech = markdownToSpeech(body)
+  return opts.final ? speech : firstSentence(speech)
+}
+
+// ASCII punctuation ends a sentence only before a space, so `foo?.bar` or `a != b` is not cut in the middle.
+function firstSentence(speech: string): string {
+  return speech.split(/(?<=[。．！？\n]|[.!?](?=\s))/)[0]?.trim() ?? ""
+}
+
+// Only option labels are read; descriptions are long enough to bury the point.
+export function questionToSpeech(questions: Question[]): string {
+  const head = questions.length === 1 ? "質問です。" : `質問が ${questions.length} つあります。`
+  return [head, ...questions.flatMap((q) => [markdownToSpeech(q.text), ...optionsToSpeech(q.options)])].join("\n")
+}
+
+function optionsToSpeech(labels: string[]): string[] {
+  const spoken = labels.map(optionToSpeech).filter(Boolean)
+  return spoken.length ? [`選択肢は、${spoken.join("、")}。`] : []
+}
+
+// Claude Code marks the suggested option with an English suffix.
+function optionToSpeech(label: string): string {
+  const recommended = /\s*\(recommended\)\s*$/i.test(label)
+  const speech = markdownToSpeech(label.replace(/\s*\(recommended\)\s*$/i, "")).replace(/[。．！？.!?、\s]+$/, "")
+  return speech && recommended ? `${speech}（推奨）` : speech
 }

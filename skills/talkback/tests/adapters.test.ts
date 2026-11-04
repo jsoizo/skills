@@ -9,19 +9,19 @@ function feed(adapter: Adapter, lines: unknown[]): AgentEvent[] {
 }
 
 describe("Claude Code transcript", () => {
-  test("text blocks are messages as soon as they arrive, whatever follows; tool calls and results are silent", () => {
+  test("text blocks are messages as soon as they arrive, final only when the message ends the turn; tool calls and results are silent", () => {
     const a = new ClaudeAdapter()
     expect(feed(a, [claude.text("m1", "調べます。", "tool_use"), claude.tool("m1", "Bash"), claude.toolResult(), claude.text("m2", "終わりました。", "end_turn")])).toEqual([
-      { type: "message", text: "調べます。" },
-      { type: "message", text: "終わりました。" },
+      { type: "message", text: "調べます。", final: false },
+      { type: "message", text: "終わりました。", final: true },
     ])
   })
 
-  test("AskUserQuestion is read as its question texts, without the options", () => {
-    const input = { questions: [{ question: "どれにしますか？", options: [{ label: "A" }] }] }
+  test("AskUserQuestion is read as its questions and option labels", () => {
+    const input = { questions: [{ question: "どれにしますか？", options: [{ label: "A", description: "説明" }] }] }
     expect(feed(new ClaudeAdapter(), [claude.text("m1", "論点です。", "tool_use"), claude.tool("m1", "AskUserQuestion", input)])).toEqual([
-      { type: "message", text: "論点です。" },
-      { type: "question", texts: ["どれにしますか？"] },
+      { type: "message", text: "論点です。", final: false },
+      { type: "question", questions: [{ text: "どれにしますか？", options: ["A"] }] },
     ])
   })
 
@@ -59,20 +59,20 @@ describe("Codex rollout", () => {
   const agent = (message: string, phase?: string) => ({ type: "event_msg", payload: { type: "agent_message", message, ...(phase ? { phase } : {}) } })
   const call = (name: string, args: unknown = {}) => ({ type: "response_item", payload: { type: "function_call", name, arguments: JSON.stringify(args) } })
 
-  // Codex Desktop writes no phase, so phase must not decide whether a message is read.
+  // Codex Desktop writes no phase, so phase must not decide whether a message is read; every message counts as final.
   test("agent messages are read with or without phase, and response_item copies are not repeated", () => {
     const dup = { type: "response_item", payload: { type: "message", role: "assistant", content: [] } }
     expect(feed(new CodexAdapter(), [agent("調べます。", "commentary"), dup, call("exec_command"), agent("直しました。"), dup, agent("終わりました。", "final_answer")])).toEqual([
-      { type: "message", text: "調べます。" },
-      { type: "message", text: "直しました。" },
-      { type: "message", text: "終わりました。" },
+      { type: "message", text: "調べます。", final: true },
+      { type: "message", text: "直しました。", final: true },
+      { type: "message", text: "終わりました。", final: true },
     ])
   })
 
-  test("request_user_input is read as its question texts", () => {
-    expect(feed(new CodexAdapter(), [agent("確認させてください。", "commentary"), call("request_user_input", { questions: [{ id: "q", question: "進めますか？" }] })])).toEqual([
-      { type: "message", text: "確認させてください。" },
-      { type: "question", texts: ["進めますか？"] },
+  test("request_user_input is read as its questions and option labels", () => {
+    expect(feed(new CodexAdapter(), [agent("確認させてください。", "commentary"), call("request_user_input", { questions: [{ id: "q", question: "進めますか？", options: [{ label: "はい", description: "説明" }] }] })])).toEqual([
+      { type: "message", text: "確認させてください。", final: true },
+      { type: "question", questions: [{ text: "進めますか？", options: ["はい"] }] },
     ])
   })
 

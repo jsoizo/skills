@@ -53,9 +53,14 @@ describe("Claude Code session", () => {
     ])
     await waitFor(() => spoken(s.home).length >= 3, 15000, "three utterances")
     // The project name has no katakana reading, so it goes to the English voice.
-    expect(spoken(s.home)).toEqual(["proj。", "調べます。\n詳しく見ます。", "ユーズエフェクト を直しました。"])
+    // Brief reading by default: the message before the tool call is cut to its first sentence.
+    expect(spoken(s.home)).toEqual(["proj。", "調べます。", "ユーズエフェクト を直しました。"])
 
-    expect(runCli(["status"], s.env).stdout).toContain("このセッション: ON")
+    expect(runCli(["status"], s.env).stdout).toContain("このセッション: ON（短い読み）")
+    expect(runCli(["full"], s.env).stdout).toContain("全文読みにしました")
+    appendLines(s.transcript, [claude.text("m3", "もう一度調べます。詳しく見ます。", "tool_use")])
+    await waitFor(() => spoken(s.home).length >= 4, 15000, "the message read in full")
+    expect(spoken(s.home)[3]).toBe("もう一度調べます。\n詳しく見ます。")
     const pid = watcherPid(s.home)
     expect(runCli(["off"], s.env).stdout).toContain("OFF にしました")
     expect(isAlive(pid)).toBe(false)

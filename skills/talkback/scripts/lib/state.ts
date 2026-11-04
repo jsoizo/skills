@@ -2,6 +2,7 @@ import fs from "node:fs"
 import type { AgentKind } from "./agent"
 import { sessionsDir, sessionStatePath } from "./paths"
 import { isAlive, type ProcRef } from "./proc"
+import type { ReadingMode } from "./text"
 
 export interface SessionState {
   sessionId: string
@@ -12,6 +13,8 @@ export interface SessionState {
   cwd: string
   watcherProc: ProcRef | null
   startedAt: string
+  // Absent in state files written before reading modes existed.
+  mode?: ReadingMode
 }
 
 export function readState(id: string): SessionState | null {
@@ -41,6 +44,8 @@ export function allStates(): SessionState[] {
     .map((f) => readState(f.slice(0, -5)))
     .filter((s): s is SessionState => s !== null)
 }
+
+export const readingMode = (s: SessionState | null): ReadingMode => s?.mode ?? "brief"
 
 export const watcherAlive = (s: SessionState | null): boolean => !!s?.watcherProc && isAlive(s.watcherProc)
 

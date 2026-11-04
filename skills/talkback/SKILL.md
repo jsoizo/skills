@@ -5,11 +5,34 @@ allowed-tools: Bash(bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts:*)
 ---
 # talkback
 
+## Spoken summary (applies for the rest of the session)
+
+Once this skill has been used in a session, keep doing this in every later reply, even after talkback is turned off:
+
+- End every reply that finishes your turn with one spoken summary line, after a blank line, in exactly this form:
+
+  ```markdown
+  [voice]: # "設定の読み込み順を直しました。テストを実行してから確認してください。"
+  ```
+
+- Also write the line at the end of the text you write right before asking the user something or handing over a plan (`AskUserQuestion`, `ExitPlanMode`). Do not write it before other tool calls.
+- Write it in the language of the reply, as speech: no code, paths, URLs, Markdown lists or other Markdown. Never use `"` inside it; quote with 「」.
+- Size it by one test only: the user must be able to follow the conversation and reply from the speech alone, without looking at the screen. There is no sentence limit; a longer line is fine when the reply needs it, but no longer than that test requires.
+- Keep what the user needs to understand and answer: the conclusion, what changed or was found, what they must decide or check, and a reason when it affects that decision. When you ask something, say the question and each option briefly.
+- Cut what only matters on screen: code, file names, exact figures and logs, step-by-step detail, and repetition. Keep a name or figure when the user needs it to answer. Rephrase for the ear instead of reading the reply as written.
+
+The desktop app does not show the line; talkback reads it aloud instead of the reply.
+
+## Commands
+
 Run one command, then tell the user its result in one short line. Do not explain how talkback works unless asked.
 
 | User intent | Command |
 | --- | --- |
 | Turn on (also when no argument is given) | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts on` |
+| Turn on, reading replies in full | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts on --full` |
+| Read only the spoken summary (the default) | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts brief` |
+| Read replies in full | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts full` |
 | Turn off | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts off` |
 | Stop what is being read now, keep speech on | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts hush` |
 | Check | `bun ${CLAUDE_SKILL_DIR}/scripts/talkback.ts status` |

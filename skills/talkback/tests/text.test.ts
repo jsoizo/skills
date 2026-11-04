@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { markdownToSpeech, questionToSpeech } from "../scripts/lib/text"
+import { markdownToSpeech, messageToSpeech, questionToSpeech } from "../scripts/lib/text"
 
 describe("what a message sounds like", () => {
   test.each([
@@ -26,7 +26,28 @@ describe("what a message sounds like", () => {
   })
 })
 
-test("questions are announced, then read without options", () => {
-  expect(questionToSpeech(["辞書はどうしますか？"])).toBe("質問です。\n辞書はどうしますか？")
-  expect(questionToSpeech(["A は？", "`B` は？"])).toBe("質問が 2 つあります。\nA は？\nB は？")
+describe("how much of a message is read", () => {
+  const voiced = '結論です。理由は長いです。\n\n[voice]: # "`npm test` が通りました。"'
+  test.each([
+    ["brief: the spoken summary replaces the body", voiced, true, "brief", "npm test が通りました。"],
+    ["brief: a summary on an intermediate message is read too", voiced, false, "brief", "npm test が通りました。"],
+    ["brief: only the last line is the summary", '本文。\n\n[voice]: # "古い要約。"\n\n[voice]: # "新しい要約。"', true, "brief", "新しい要約。"],
+    ["brief: an example in a code block is not the summary", '書式です。\n\n```markdown\n[voice]: # "例。"\n```', true, "brief", "書式です。\nMarkdown のコード 1 行。"],
+    ["brief: a stray double quote inside the summary still matches", '本文。\n\n[voice]: # "「a" を直しました。"', true, "brief", "「a\" を直しました。"],
+    ["brief: inline code with ? or ! does not end the first sentence", "`foo?.bar` と `a != b` を直します。次に進みます。", false, "brief", "foo?.bar と a != b を直します。"],
+    ["brief: an English sentence ends at a period before a space", "Checking the config. Then running tests.", false, "brief", "Checking the config."],
+    ["brief: an intermediate message without a summary is cut to its first sentence", "調べます。詳しく見ます。\n\n- 項目", false, "brief", "調べます。"],
+    ["brief: a final message without a summary is read in full", "結論です。理由です。", true, "brief", "結論です。理由です。"],
+    ["full: the body is read and the summary is not", voiced, true, "full", "結論です。理由は長いです。"],
+    // Inside a paragraph the line is not a link definition, so Markdown would read it out.
+    ["full: a summary written inside a paragraph is not read out", '本文です。\n[voice]: # "要約。"', true, "full", "本文です。"],
+  ] as const)("%s", (_name, md, final, mode, spoken) => {
+    expect(messageToSpeech(md, { final, mode })).toBe(spoken)
+  })
+})
+
+test("questions are announced, then read with their option labels", () => {
+  expect(questionToSpeech([{ text: "辞書はどうしますか？", options: ["作る", "使わない"] }])).toBe("質問です。\n辞書はどうしますか？\n選択肢は、作る、使わない。")
+  expect(questionToSpeech([{ text: "A は？", options: [] }, { text: "`B` は？", options: [] }])).toBe("質問が 2 つあります。\nA は？\nB は？")
+  expect(questionToSpeech([{ text: "進めますか？", options: ["はい (Recommended)", "いいえ。", "<none>"] }])).toBe("質問です。\n進めますか？\n選択肢は、はい（推奨）、いいえ。")
 })

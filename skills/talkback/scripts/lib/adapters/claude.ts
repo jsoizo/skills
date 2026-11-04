@@ -1,4 +1,4 @@
-import { isRecord, looksInjected, questionTexts, type Adapter, type AgentEvent } from "./types"
+import { isRecord, looksInjected, parseQuestions, type Adapter, type AgentEvent } from "./types"
 
 const QUESTION_TOOLS = new Set(["AskUserQuestion"])
 const TYPED_SOURCES = new Set(["typed", "queued", "suggestion_accepted", "sdk"])
@@ -33,13 +33,15 @@ export class ClaudeAdapter implements Adapter {
     const msg = line.message
     if (!isRecord(msg) || !Array.isArray(msg.content)) return []
     const out: AgentEvent[] = []
+    // Every content block line of a message carries the message's final stop_reason.
+    const final = msg.stop_reason !== "tool_use"
     for (const block of msg.content) {
       if (!isRecord(block)) continue
       if (block.type === "text" && typeof block.text === "string" && block.text.trim()) {
-        out.push({ type: "message", text: block.text })
+        out.push({ type: "message", text: block.text, final })
       } else if (block.type === "tool_use" && QUESTION_TOOLS.has(block.name)) {
-        const texts = questionTexts(block.input)
-        if (texts.length) out.push({ type: "question", texts })
+        const questions = parseQuestions(block.input)
+        if (questions.length) out.push({ type: "question", questions })
       }
     }
     return out

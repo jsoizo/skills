@@ -5,12 +5,13 @@ import { ClaudeAdapter } from "./lib/adapters/claude"
 import { CodexAdapter } from "./lib/adapters/codex"
 import type { AgentEvent } from "./lib/adapters/types"
 import { chunkSentences, play, Synthesizer, voiceConfigFromEnv } from "./lib/audio"
+import { BargeIn, nativeProbe } from "./lib/bargein"
 import { AbortedError, PlayLock } from "./lib/lock"
 import { hushPath, lastSpeakerPath, playLockPath, sessionLogPath, waitingDir } from "./lib/paths"
 import { isAlive, procRef } from "./lib/proc"
 import { loadDictionaries, SayReadingProfile } from "./lib/reading"
-import { liveSessions, readState, removeState, writeState, type SessionState } from "./lib/state"
-import { cleanup, markdownToSpeech, questionToSpeech } from "./lib/text"
+import { liveSessions, readingMode, readState, removeState, writeState, type SessionState } from "./lib/state"
+import { cleanup, messageToSpeech, questionToSpeech } from "./lib/text"
 
 const TAIL_POLL_MS = 250
 const LIVENESS_POLL_MS = 2000
@@ -19,6 +20,7 @@ const LOG_MAX_BYTES = 1024 * 1024
 const SWITCH_TIMEOUT_MS = 60_000
 // Lets a waiting session take the lock between two messages of a busy one.
 const YIELD_MS = 300
+const BARGE_IN_POLL_MS = 100
 
 // Never log message text: transcripts can hold tool output and secrets.
 const log = (msg: string) => console.log(`${new Date().toISOString()} ${msg}`)
@@ -52,6 +54,32 @@ function nameFile(): Promise<string> {
   const text = `${cleanup(projectName())}。`
   if (nameAudio?.text !== text) nameAudio = { text, file: synth.render(profile.toSegments(text)) }
   return nameAudio.file
+}
+
+// ---- barge-in ----
+
+function makeBargeIn(): BargeIn | null {
+  if (process.env.TALKBACK_BARGE_IN === "off") return null
+  const probe = nativeProbe()
+  if (!probe) log("barge-in unavailable: native probe failed to load")
+  return probe ? new BargeIn(probe) : null
+}
+
+const bargeIn = makeBargeIn()
+
+// Stops our own playback at once; the hush file reaches the other sessions within their poll interval.
+function watchBargeIn(): () => void {
+  if (!bargeIn) return () => {}
+  bargeIn.start()
+  const timer = setInterval(() => {
+    if (!bargeIn.poll()) return
+    clearInterval(timer)
+    log("barge-in")
+    fs.writeFileSync(hushPath(), String(Date.now()), { mode: 0o600 })
+    hushSeen = hushMtime()
+    interrupt()
+  }, BARGE_IN_POLL_MS)
+  return () => clearInterval(timer)
 }
 
 // ---- speech queue ----
@@ -99,7 +127,12 @@ async function speak(text: string, signal: AbortSignal) {
   try {
     if (Date.now() - releasedAt < YIELD_MS && lock.othersWaiting()) await Bun.sleep(YIELD_MS)
     await lock.acquire(signal)
+    let stopWatching = () => {}
     try {
+      // Another session's barge-in may have released the lock to us before our hush poll has seen it.
+      checkHush()
+      if (signal.aborted) return
+      stopWatching = watchBargeIn()
       if (readQuiet(lastSpeakerPath()) !== sessionId) {
         const name = await nameFile().catch((e) => {
           nameAudio = null
@@ -116,6 +149,7 @@ async function speak(text: string, signal: AbortSignal) {
         await play(file, signal)
       }
     } finally {
+      stopWatching()
       lock.release()
       releasedAt = Date.now()
     }
@@ -128,9 +162,9 @@ async function speak(text: string, signal: AbortSignal) {
 function handle(ev: AgentEvent) {
   switch (ev.type) {
     case "message":
-      return enqueue(markdownToSpeech(ev.text))
+      return enqueue(messageToSpeech(ev.text, { final: ev.final, mode: readingMode(readState(sessionId)) }))
     case "question":
-      return enqueue(questionToSpeech(ev.texts))
+      return enqueue(questionToSpeech(ev.questions))
     case "interrupt":
       return interrupt()
     case "continuedIn":

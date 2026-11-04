@@ -58,7 +58,8 @@ export function spoken(home: string): string[] {
 
 // Built from scratch so the Claude Code or Codex session running the tests does not leak in.
 export function baseEnv(home: string, extra: Record<string, string> = {}): Record<string, string> {
-  return { PATH: `${fakeAudioBin(home)}:${process.env.PATH ?? "/usr/bin:/bin"}`, HOME: home, TMPDIR: path.join(home, "tmp"), ...extra }
+  // Barge-in would read the real keyboard and microphone of the machine running the tests.
+  return { PATH: `${fakeAudioBin(home)}:${process.env.PATH ?? "/usr/bin:/bin"}`, HOME: home, TMPDIR: path.join(home, "tmp"), TALKBACK_BARGE_IN: "off", ...extra }
 }
 
 export function runCli(args: string[], env: Record<string, string>) {

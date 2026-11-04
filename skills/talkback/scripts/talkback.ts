@@ -1,20 +1,23 @@
 #!/usr/bin/env bun
 // Turns spoken replies on or off for the current Claude Code or Codex session.
-// Usage: bun talkback.ts on | off | hush | status | doctor
+// Usage: bun talkback.ts on [--full] | off | brief | full | hush | status | doctor
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { detectAgent, findTranscript, transcriptCwd, type AgentInfo } from "./lib/agent"
+import { nativeProbe } from "./lib/bargein"
 import { hushPath, logsDir, sessionLogPath, sessionsDir, stateDir, waitingDir, WATCHER_PATH } from "./lib/paths"
 import { commandLine, isAlive, killGroup, procRef, type ProcRef } from "./lib/proc"
 import { loadDictionaries } from "./lib/reading"
-import { allStates, liveSessions, readState, removeState, watcherAlive, writeState, type SessionState } from "./lib/state"
+import { allStates, liveSessions, readingMode, readState, removeState, watcherAlive, writeState, type SessionState } from "./lib/state"
+import type { ReadingMode } from "./lib/text"
 
 const EXIT_ERROR = 1
 const EXIT_PREREQ = 2
 const LOG_MAX_BYTES = 1024 * 1024
 
 const print = (msg: string) => console.log(`talkback: ${msg}`)
+const MODE_LABEL: Record<ReadingMode, string> = { brief: "短い読み", full: "全文読み" }
 
 function fail(code: number, msg: string): never {
   console.error(`talkback: ${msg}`)
@@ -92,8 +95,8 @@ function codexRuleAllows(): boolean | null {
   }
 }
 
-function sandboxHelp(agent: AgentInfo, action: "on" | "off" | "hush"): never {
-  const what = action === "on" ? "読み上げを開始できません" : "読み上げを止められません"
+function sandboxHelp(agent: AgentInfo, action: "on" | "off" | "hush" | "brief" | "full"): never {
+  const what = action === "on" ? "読み上げを開始できません" : action === "off" || action === "hush" ? "読み上げを止められません" : "読み方を切り替えられません"
   if (agent.kind === "claude") {
     fail(
       EXIT_PREREQ,
@@ -155,8 +158,10 @@ async function on() {
     fail(EXIT_PREREQ, "エージェントのプロセスを特定できないため、開始しません（監視プロセスが終了できなくなるため）。")
   }
 
-  if (watcherAlive(readState(agent.sessionId))) {
-    print("このセッションの読み上げはすでに ON です。")
+  const current = readState(agent.sessionId)
+  if (watcherAlive(current)) {
+    if (process.argv.includes("--full") && readingMode(current) !== "full") return setMode("full")
+    print(`このセッションの読み上げはすでに ON です（${MODE_LABEL[readingMode(current)]}）。`)
     return
   }
   // Claude Code: the same process under another session ID means /clear, so that watcher is stale.
@@ -181,6 +186,7 @@ async function on() {
     cwd: transcriptCwd(agent.kind, transcript) ?? process.cwd(),
     watcherProc: null,
     startedAt: new Date().toISOString(),
+    mode: process.argv.includes("--full") ? "full" : "brief",
   }
   writeState(state)
   const logFd = openLog(agent.sessionId)
@@ -199,7 +205,7 @@ async function on() {
     removeState(agent.sessionId)
     fail(EXIT_ERROR, `監視プロセスがすぐに終了しました。ログ: ${sessionLogPath(agent.sessionId)}`)
   }
-  print("このセッションの読み上げを ON にしました。")
+  print(`このセッションの読み上げを ON にしました（${MODE_LABEL[state.mode!]}）。`)
   // Reaching here inside Codex without a rule means a one-time escalation was approved.
   if (agent.kind === "codex" && codexRuleAllows() === false) {
     print(`次回から承認なしで切り替えるには、${codexRuleFile()} に次のルールを追加してください。\n${codexRuleText()}`)
@@ -225,6 +231,19 @@ async function off() {
   print("このセッションの読み上げを OFF にしました。")
 }
 
+// The watcher reads the mode from the state file before each message, so the switch applies from the next one.
+function setMode(mode: ReadingMode) {
+  const agent = requireAgent()
+  if (!stateWritable()) sandboxHelp(agent, mode)
+  const state = readState(agent.sessionId)
+  if (!watcherAlive(state)) {
+    print("このセッションの読み上げは OFF です。")
+    return
+  }
+  writeState({ ...state!, mode })
+  print(`${MODE_LABEL[mode]}にしました。次のメッセージから切り替わります。`)
+}
+
 // Runs outside any agent session too, so a global keyboard shortcut can call it.
 // Watchers poll the file's mtime; no signal is sent, so a watcher that predates hush is left alone.
 function hush() {
@@ -241,8 +260,9 @@ function hush() {
 function status() {
   const agent = detectAgent()
   const sessions = liveSessions()
-  const mine = agent && sessions.some((s) => s.sessionId === agent.sessionId)
-  print(`このセッション: ${agent ? (mine ? "ON" : "OFF") : "不明（エージェントの外）"}。ON のセッション数: ${sessions.length}`)
+  const mine = agent ? sessions.find((s) => s.sessionId === agent.sessionId) : undefined
+  const here = !agent ? "不明（エージェントの外）" : mine ? `ON（${MODE_LABEL[readingMode(mine)]}）` : "OFF"
+  print(`このセッション: ${here}。ON のセッション数: ${sessions.length}`)
 }
 
 function lastLineParses(file: string): boolean {
@@ -266,6 +286,12 @@ function doctor() {
     checks.push([`音声 ${v}`, listed, "システム設定 > アクセシビリティ > 読み上げコンテンツ で音声を追加してください"])
   }
   checks.push([`Bun.markdown（Bun ${Bun.version}）`, typeof (Bun as any).markdown?.render === "function", "Bun を更新してください"])
+  if (process.env.TALKBACK_BARGE_IN !== "off") {
+    const probe = nativeProbe()
+    checks.push(["barge-in: キー入力の検知", probe !== null && Number.isFinite(probe.keyIdleSeconds()), "読み上げは動きます。入力を始めても読み上げは止まりません"])
+    // No microphone, or one that also plays our speech, leaves typing as the only trigger, which is not a failure.
+    if (probe && probe.micRunning() === null) checks.push(["barge-in: マイクの検知は使いません（マイクがないか、再生と同じデバイスのため）", true])
+  }
   const dicts = loadDictionaries()
   checks.push([`辞書（上書き ${dicts.overrides.size} 語、kanalizer ${dicts.words.size} 語）`, dicts.words.size > 0 && dicts.overrides.size > 0])
   const agent = detectAgent()
@@ -288,7 +314,7 @@ function doctor() {
   if (checks.some(([, ok]) => !ok)) process.exit(EXIT_PREREQ)
 }
 
-const commands: Record<string, () => unknown> = { on, off, hush, status, doctor }
+const commands: Record<string, () => unknown> = { on, off, brief: () => setMode("brief"), full: () => setMode("full"), hush, status, doctor }
 const cmd = commands[process.argv[2] ?? ""]
-if (!cmd) fail(EXIT_PREREQ, "usage: bun talkback.ts on | off | hush | status | doctor")
+if (!cmd) fail(EXIT_PREREQ, "usage: bun talkback.ts on [--full] | off | brief | full | hush | status | doctor")
 await cmd()

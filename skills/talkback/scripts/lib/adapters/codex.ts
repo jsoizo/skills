@@ -1,4 +1,4 @@
-import { isRecord, looksInjected, questionTexts, type Adapter, type AgentEvent } from "./types"
+import { isRecord, looksInjected, parseQuestions, type Adapter, type AgentEvent } from "./types"
 
 const QUESTION_TOOLS = new Set(["request_user_input"])
 
@@ -16,7 +16,8 @@ export class CodexAdapter implements Adapter {
     if (p.type === "turn_aborted" || (p.type === "user_message" && typeof p.message === "string" && !looksInjected(p.message))) {
       return [{ type: "interrupt" }]
     }
-    if (p.type === "agent_message" && typeof p.message === "string" && p.message.trim()) return [{ type: "message", text: p.message }]
+    // Some desktop builds omit `phase`, so every message counts as final and is read in full without a spoken summary.
+    if (p.type === "agent_message" && typeof p.message === "string" && p.message.trim()) return [{ type: "message", text: p.message, final: true }]
     return []
   }
 
@@ -28,7 +29,7 @@ export class CodexAdapter implements Adapter {
         return []
       }
     }
-    const texts = questionTexts(args)
-    return texts.length ? [{ type: "question", texts }] : []
+    const questions = parseQuestions(args)
+    return questions.length ? [{ type: "question", questions }] : []
   }
 }
