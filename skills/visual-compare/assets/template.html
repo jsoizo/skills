@@ -79,6 +79,8 @@
   figcaption, .cap { font-size: 12px; color: var(--sub); }
   .stack { position: relative; }
   .stack img { position: absolute; left: 0; top: 0; }
+  /* Same red as odiff's diffColor in compare.mjs */
+  .diff-frame { background: #e60033; }
   .stage img { display: block; max-width: none; box-shadow: 0 0 0 1px var(--border); }
   .slide-bar { display: flex; align-items: center; gap: 8px; width: min(560px, 100%); }
   /* The track shows how much of the image each side covers, in the same colors as the side tags */
@@ -243,12 +245,24 @@
     el.width = Math.round(image.w * Number($("zoom").value))
     return el
   }
-  function figure(caption, image) {
+  function figure(caption, content) {
     const f = document.createElement("figure")
     const c = document.createElement("figcaption")
     c.textContent = caption
-    f.append(c, image ? img(image) : document.createTextNode(""))
+    f.append(c, content)
     return f
+  }
+  // The diff image has one input's size; the red frame shows the canvas it does not reach
+  function diffFrame(it) {
+    const s = document.createElement("div")
+    s.className = "diff-frame"
+    const z = Number($("zoom").value)
+    s.style.width = `${Math.round(Math.max(it.a.w, it.b.w) * z)}px`
+    s.style.height = `${Math.round(Math.max(it.a.h, it.b.h) * z)}px`
+    const d = img(it.diff)
+    d.height = Math.round(it.diff.h * z)
+    s.append(d)
+    return s
   }
   // Size the frame to the larger image so neither image of a mismatched pair spills out
   function stack(under, over) {
@@ -287,16 +301,18 @@
     stage.replaceChildren()
     if (!it.a || !it.b) {
       const only = it.a ? it.a : it.b
-      stage.append(caption(T.missing(it.a ? B : A)), figure(it.a ? A : B, only))
+      stage.append(caption(T.missing(it.a ? B : A)), figure(it.a ? A : B, img(only)))
       return
     }
     if (mode === "side") {
       const row = document.createElement("div")
       row.className = "side"
-      row.append(figure(A, it.a), figure(B, it.b), figure(T.diffCap(amount(it)), it.diff))
+      const diff = it.diff ? figure(T.diffCap(amount(it)), diffFrame(it)) : figure(T.modes.diff, caption(T.status.same))
+      row.append(figure(A, img(it.a)), figure(B, img(it.b)), diff)
       stage.appendChild(row)
     } else if (mode === "diff") {
-      stage.append(caption(T.diffCap(amount(it))), img(it.diff))
+      if (it.diff) stage.append(caption(T.diffCap(amount(it))), diffFrame(it))
+      else stage.append(caption(T.status.same))
     } else if (mode === "slide") {
       const range = document.createElement("input")
       range.type = "range"; range.min = "0"; range.max = "100"; range.value = String(slidePos); range.className = "slider"

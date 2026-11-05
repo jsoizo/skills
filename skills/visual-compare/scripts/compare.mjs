@@ -1,13 +1,12 @@
-#!/usr/bin/env node
-// Pair images by relative path across two directories, count differing pixels with ImageMagick,
+#!/usr/bin/env bun
+// Pair images by relative path across two directories, count differing pixels with odiff,
 // and write a self-contained comparison page (index.html for local viewing, body.html for hosts that add their own document skeleton).
-import { execFileSync, spawnSync } from "node:child_process"
 import fs from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-const USAGE = `Usage: node compare.mjs --a <dir> --b <dir> --out <dir> [options]
+const USAGE = `Usage: bun compare.mjs --a <dir> --b <dir> --out <dir> [options]
 
 Options:
   --label-a <text>      Name of the first set (default: "A")
@@ -19,9 +18,10 @@ Options:
   --theme <file>        CSS that overrides the color tokens
                         (default: $VISUAL_COMPARE_THEME, then ~/.config/visual-compare/theme.css,
                         then ~/.claude/visual-compare/theme.css)
-  --fuzz <percent>      Color distance treated as equal (default: 0)`
+  --threshold <0-1>     odiff color difference treated as equal (default: 0)`
 
 const IMAGE_EXT = new Set([".png", ".jpg", ".jpeg", ".webp"])
+const OPTIONS = new Set(["a", "b", "out", "label-a", "label-b", "title", "description", "lang", "meta", "theme", "threshold"])
 const here = path.dirname(fileURLToPath(import.meta.url))
 
 function parseArgs(argv) {
@@ -30,11 +30,14 @@ function parseArgs(argv) {
     const key = argv[i]
     if (!key.startsWith("--")) fail(`Unexpected argument: ${key}`)
     if (key === "--help") { console.log(USAGE); process.exit(0) }
+    if (!OPTIONS.has(key.slice(2))) fail(`Unknown option: ${key}`)
     const value = argv[++i]
     if (value === undefined) fail(`Missing value for ${key}`)
     opts[key.slice(2)] = value
   }
   for (const required of ["a", "b", "out"]) if (!opts[required]) fail(`--${required} is required`)
+  opts.threshold = Number(opts.threshold ?? 0)
+  if (!(opts.threshold >= 0 && opts.threshold <= 1)) fail("--threshold must be a number from 0 to 1")
   return opts
 }
 
@@ -43,10 +46,17 @@ function fail(message, code = 1) {
   process.exit(code)
 }
 
-function requireImageMagick() {
-  const probe = spawnSync("magick", ["-version"], { encoding: "utf8" })
-  if (probe.error || probe.status !== 0) {
-    console.error("ImageMagick 7 (the `magick` command) was not found. Install it (e.g. `brew install imagemagick`) and run again.")
+async function loadOdiff() {
+  const hint = "Run it with `bun <skill-dir>/scripts/compare.mjs ...`. The first run downloads odiff-bin 4.5.0 into Bun's cache and needs network access."
+  if (typeof Bun === "undefined") {
+    console.error(`This script needs Bun. ${hint}`)
+    process.exit(2)
+  }
+  try {
+    // Bun rejects a versioned specifier under a package.json that has a name, so resolve from outside every project
+    return await import(Bun.resolveSync("odiff-bin@4.5.0", "/"))
+  } catch (e) {
+    console.error(`Could not load odiff-bin 4.5.0: ${e.message}\n${hint}`)
     process.exit(2)
   }
 }
@@ -57,8 +67,10 @@ function listImages(root) {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       if (entry.name.startsWith(".")) continue
       const full = path.join(dir, entry.name)
+      const ext = path.extname(entry.name)
       if (entry.isDirectory()) walk(full)
-      else if (IMAGE_EXT.has(path.extname(entry.name).toLowerCase())) found.push(path.relative(root, full).split(path.sep).join("/"))
+      else if (IMAGE_EXT.has(ext)) found.push(path.relative(root, full).split(path.sep).join("/"))
+      else if (IMAGE_EXT.has(ext.toLowerCase())) fail(`odiff reads only lowercase extensions. Rename ${full} to end in ${ext.toLowerCase()}.`)
     }
   }
   walk(root)
@@ -66,36 +78,45 @@ function listImages(root) {
 }
 
 function sizeOf(file) {
-  const [w, h] = execFileSync("magick", ["identify", "-format", "%w %h", `${file}[0]`], { encoding: "utf8" }).trim().split(" ").map(Number)
-  return { w, h }
+  const b = fs.readFileSync(file)
+  const size = b.readUInt32BE(0) === 0x89504e47 ? { w: b.readUInt32BE(16), h: b.readUInt32BE(20) }
+    : b.readUInt16BE(0) === 0xffd8 ? jpegSize(b)
+    : b.toString("latin1", 0, 4) === "RIFF" && b.toString("latin1", 8, 12) === "WEBP" ? webpSize(b)
+    : null
+  if (!size?.w || !size?.h) throw new Error(`Could not read the image size of ${file}`)
+  return size
 }
 
-// Pad to a shared canvas from the top-left so a height change still counts as a difference
-function padded(file, size, tmpDir) {
-  const out = path.join(tmpDir, `${Math.random().toString(36).slice(2)}.png`)
-  execFileSync("magick", [file, "-background", "none", "-gravity", "northwest", "-extent", `${size.w}x${size.h}`, out])
-  return out
-}
-
-function countDiff(a, b, diffOut, fuzz) {
-  fs.mkdirSync(path.dirname(diffOut), { recursive: true })
-  const result = spawnSync("magick", [
-    "compare", "-metric", "AE", "-fuzz", `${fuzz}%`,
-    "-highlight-color", "#e60033", "-lowlight-color", "rgba(255,255,255,0.8)",
-    a, b, diffOut,
-  ], { encoding: "utf8" })
-  // Exit 1 only means "images differ"; 2 is a real error
-  if (result.status === 2 || result.error) throw new Error(`magick compare failed for ${a}: ${result.stderr || result.error}`)
-  // ImageMagick 7.1.1+ prints "<scaled> (<pixels>)"; older versions print the pixel count alone.
-  // Warnings may precede the metric, so read the last line only.
-  const last = result.stderr.trim().split("\n").pop().trim()
-  const m = last.match(/^([\d.e+-]+)(?:\s*\(([\d.e+-]+)\))?$/)
-  const px = m ? Math.round(Number(m[2] ?? m[1])) : NaN
-  // A silent misread would report a changed pair as unchanged
-  if (!Number.isFinite(px) || (result.status === 1 && px === 0)) {
-    throw new Error(`Could not read the differing pixel count for ${a} (exit ${result.status}): ${result.stderr.trim()}`)
+function jpegSize(b) {
+  for (let i = 2; i + 9 < b.length;) {
+    if (b[i] !== 0xff) return null
+    const marker = b[i + 1]
+    if (marker === 0xff) { i++; continue }
+    if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) return { w: b.readUInt16BE(i + 7), h: b.readUInt16BE(i + 5) }
+    i += 2 + b.readUInt16BE(i + 2)
   }
-  return px
+  return null
+}
+
+function webpSize(b) {
+  const chunk = b.toString("latin1", 12, 16)
+  if (chunk === "VP8 ") return { w: b.readUInt16LE(26) & 0x3fff, h: b.readUInt16LE(28) & 0x3fff }
+  if (chunk === "VP8L") {
+    const bits = b.readUInt32LE(21)
+    return { w: (bits & 0x3fff) + 1, h: ((bits >> 14) & 0x3fff) + 1 }
+  }
+  if (chunk === "VP8X") return { w: b.readUIntLE(24, 3) + 1, h: b.readUIntLE(27, 3) + 1 }
+  return null
+}
+
+async function countDiff(compare, rel, base, other, diffOut, threshold) {
+  fs.mkdirSync(path.dirname(diffOut), { recursive: true })
+  const result = await compare(base, other, diffOut, { threshold, diffColor: "#e60033", diffOverlay: 0.8 })
+    .catch((e) => { throw new Error(`odiff failed for ${rel}: ${e.message}`) })
+  if (result.match) return 0
+  // A silent misread would report a changed pair as unchanged
+  if (result.reason === "pixel-diff" && result.diffCount > 0) return result.diffCount
+  throw new Error(`odiff returned no pixel count for ${rel}: ${JSON.stringify(result)}`)
 }
 
 // Deleting out/{a,b,diff} must never touch the inputs
@@ -129,14 +150,13 @@ function resolveTheme(opt) {
   return file ? { file, css: fs.readFileSync(file, "utf8") } : null
 }
 
-function main() {
+async function main() {
   const opts = parseArgs(process.argv.slice(2))
-  requireImageMagick()
+  const odiff = await loadOdiff()
   const dirA = path.resolve(opts.a), dirB = path.resolve(opts.b), out = path.resolve(opts.out)
   for (const d of [dirA, dirB]) if (!fs.statSync(d, { throwIfNoEntry: false })?.isDirectory()) fail(`Not a directory: ${d}`)
   const meta = opts.meta ? JSON.parse(fs.readFileSync(opts.meta, "utf8")) : {}
   const labelA = opts["label-a"] || "A", labelB = opts["label-b"] || "B"
-  const fuzz = Number(opts.fuzz || 0)
   assertSeparate(out, [dirA, dirB])
 
   const inA = new Set(listImages(dirA)), inB = new Set(listImages(dirB))
@@ -144,7 +164,6 @@ function main() {
 
   for (const sub of ["a", "b", "diff"]) fs.rmSync(path.join(out, sub), { recursive: true, force: true })
   fs.mkdirSync(out, { recursive: true })
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "visual-compare-"))
 
   const all = [...new Set([...inA, ...inB])].sort((x, y) => {
     const [gx, px] = sortKey(x), [gy, py] = sortKey(y)
@@ -158,7 +177,7 @@ function main() {
     return `${sub}/${rel}`
   }
 
-  const items = all.map((rel) => {
+  const toItem = async (rel) => {
     const dir = path.posix.dirname(rel)
     const group = dir === "." ? "" : dir
     const info = meta.items?.[rel] || {}
@@ -181,16 +200,19 @@ function main() {
     const canvas = { w: Math.max(item.a.w, item.b.w), h: Math.max(item.a.h, item.b.h) }
     // Keep the original extension in the name so x.png and x.jpg do not share one diff file
     const diffRel = rel.toLowerCase().endsWith(".png") ? rel : `${rel}.png`
-    const cmpA = sameSize ? fileA : padded(fileA, canvas, tmpDir)
-    const cmpB = sameSize ? fileB : padded(fileB, canvas, tmpDir)
-    item.px = countDiff(cmpA, cmpB, path.join(out, "diff", diffRel), fuzz)
-    item.diff = { src: `diff/${diffRel}`, ...canvas }
-    // Share of the compared (padded) area, so the same change reads the same at any image size
+    const diffOut = path.join(out, "diff", diffRel)
+    // odiff draws the diff at the first image's size, so B goes first when only B spans the whole canvas
+    const bFirst = !sameSize && item.b.w === canvas.w && item.b.h === canvas.h
+    item.px = await countDiff(odiff.compare, rel, bFirst ? fileB : fileA, bFirst ? fileA : fileB, diffOut, opts.threshold)
+    // odiff writes no diff image for a match
+    if (item.px > 0) item.diff = { src: `diff/${diffRel}`, ...sizeOf(diffOut) }
+    // Share of the canvas that spans both images, so the same change reads the same at any image size
     item.ratio = item.px / (canvas.w * canvas.h)
     item.status = !sameSize ? "size" : item.px > 0 ? "changed" : "same"
     return item
-  })
-  fs.rmSync(tmpDir, { recursive: true, force: true })
+  }
+  const items = []
+  for (const rel of all) items.push(await toItem(rel))
 
   // Default titles drop the extension; bring it back where two files in a group would read the same
   const seen = new Map()
@@ -233,4 +255,4 @@ function main() {
   console.log(`Open: ${path.join(out, "index.html")}`)
 }
 
-main()
+await main()

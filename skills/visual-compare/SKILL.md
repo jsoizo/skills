@@ -1,6 +1,6 @@
 ---
 name: visual-compare
-description: Compare two sets of screenshots or images that share the same framing (before/after a code change, Figma design vs implementation, one environment vs another) and build an HTML page to inspect them side by side, as a slider, overlay, blink, or pixel diff. Counts differing pixels with ImageMagick and flags size changes that overlap-only tools miss. Use when asked to check a UI change for visual regressions, show before/after screenshots, compare an implementation with Figma, or produce a visual diff report.
+description: Compare two sets of screenshots or images that share the same framing (before/after a code change, Figma design vs implementation, one environment vs another) and build an HTML page to inspect them side by side, as a slider, overlay, blink, or pixel diff. Counts differing pixels with odiff, run through Bun, and flags size changes that overlap-only tools miss. Use when asked to check a UI change for visual regressions, show before/after screenshots, compare an implementation with Figma, or produce a visual diff report.
 ---
 # Visual Compare
 
@@ -13,17 +13,17 @@ Build a comparison page from two directories of images. The skill owns the compa
 3. **Run the comparison:**
 
    ```sh
-   node <skill-dir>/scripts/compare.mjs --a shots/before --b shots/after --out compare \
+   bun <skill-dir>/scripts/compare.mjs --a shots/before --b shots/after --out compare \
      --label-a Before --label-b After --title "Checkout screens" --lang en
    ```
 
-   It requires ImageMagick 7 (`magick`). If the script exits with code 2 because `magick` is missing, stop and ask the user how to proceed (for example `brew install imagemagick`). Do not install it or switch tools without asking.
+   It requires [Bun](https://bun.sh) and nothing else to install. The first run downloads odiff-bin 4.5.0 into Bun's cache, so it needs network access. If `bun` is not found, or the script exits with code 2 because odiff-bin cannot be loaded, stop and ask the user how to proceed. Do not install anything or switch tools without asking.
 4. **Check every non-matching item** before reporting. Look at the diff image. Re-capture once and compare again when a difference looks unrelated to the change: rendering noise of a few pixels does happen and disappears on a second capture. For differences that are intended, add a note in `meta.json` and rerun so the page explains them.
 5. **Open the page locally** in a browser (`open compare/index.html` on macOS, `xdg-open` on Linux). Report the summary line the script prints and what each remaining difference is.
 6. **Share only when asked.** The output directory is self-contained static files: `index.html`, the images under `a/`, `b/` and `diff/`, and `files.json` listing those images. Share it through whatever the user or the agent's environment provides (a static host, an archive, an agent-specific publishing feature). `body.html` is the same page without the document skeleton, for hosts that wrap pages in their own. Screenshots can contain real data: check them before sharing, and tell the user who will be able to see the result.
    - Claude Artifacts: read [references/sharing-claude-artifacts.md](references/sharing-claude-artifacts.md) first.
 
-The script refuses an `--out` directory that overlaps either input directory, because it clears `a/`, `b/` and `diff/` under `--out` on every run. It exits with 1 when no images are found, so a wrong path never reads as "everything matches".
+The script refuses an `--out` directory that overlaps either input directory, because it clears `a/`, `b/` and `diff/` under `--out` on every run. It exits with 1 when no images are found, so a wrong path never reads as "everything matches". It also exits with 1 on an image with an uppercase extension such as `.PNG`, because odiff reads only lowercase extensions. Rename the file and run again.
 
 ## Options
 
@@ -34,7 +34,7 @@ The script refuses an `--out` directory that overlaps either input directory, be
 | `--lang en\|ja` | UI language of the page (default `en`) |
 | `--meta <file>` | Display names, notes, links and group names (format below) |
 | `--theme <file>` | CSS that overrides the color tokens |
-| `--fuzz <percent>` | Color distance treated as equal; keep `0` for regression checks |
+| `--threshold <0-1>` | odiff color difference treated as equal (default `0`). Keep `0` for regression checks |
 
 `meta.json`:
 
@@ -57,9 +57,9 @@ Without `meta.json`, an item's title is its file name without the extension and 
 
 | Status | Meaning |
 | --- | --- |
-| `same` | Same size and no differing pixels |
+| `same` | Same size and no differing pixels. There is no diff image |
 | `changed` | Same size, some pixels differ. The page shows the share of the compared area (a non-zero share is never rounded to 0%; below 0.01% it reads `<0.01%`) with the pixel count next to it |
-| `size` | Sizes differ. Both images are padded from the top-left to the larger size before counting, so a page that got shorter or taller never passes as unchanged |
+| `size` | Sizes differ. The count covers the larger canvas, with both images aligned at the top-left. A pixel that only one side has counts as differing unless it is fully transparent, so a page that got shorter or taller never passes as unchanged. When neither image covers the other, the diff image has A's size and the page shows the rest of the canvas in red |
 | `only-a`, `only-b` | The image exists on one side only |
 
 Sort order follows the relative path with numeric collation, so prefix file names with `01-`, `02-` to control the order.
