@@ -54,6 +54,7 @@ Preserve code identifiers, commands, paths, URLs, Markdown structure, placeholde
 - Keep established terms when they aid recognition and search: `キャッシュを無効化する`, `依存関係を解決する`, `結果整合性`.
 - At first use, briefly explain a specialized loanword whose literal form does not reveal its behavior.
 - Avoid English-style inanimate subjects, stacked nouns, repeated possessives, excessive passive voice, and automatic mappings such as `provide = 提供する`, `allow = 許可する`, or `support = サポートする`.
+- Place each 読点 where the Japanese 係り受け needs one, not where the English had a comma. `In the old layout, this page comes first.` becomes `旧レイアウトではこのページが先頭です。`, not `旧レイアウトでは、このページが先頭です。` Keep a 読点 that marks inverted order, separates two long modifiers, follows a sentence-initial connective, or prevents a misreading. When a heading seems to need a 読点, cut it to its main point instead of deleting the 読点.
 - Prefer reader action for procedures and component behavior for reference material.
 - Preserve the force of `must`, `should`, `may`, `can`, and probabilistic language.
 - Keep sentences compact, but do not sacrifice constraints or edge cases.
@@ -63,7 +64,7 @@ For detailed decisions and common traps, read [references/style-guide.md](refere
 ## Review in two independent passes
 
 1. **Fidelity:** Compare with the source and verify actors, conditions, causality, negation, modality, quantities, and terminology. Reject a fluent rewrite that changes behavior.
-2. **Japanese quality:** Remove source-language syntax, vague translated metaphors, redundant subjects, noun-heavy phrasing, and unnatural commands.
+2. **Japanese quality:** Remove source-language syntax and punctuation (a 読点 copied from an English comma), vague translated metaphors, redundant subjects, noun-heavy phrasing, and unnatural commands.
 
 Also check that protected syntax and identifiers are unchanged. A text linter may catch mechanical issues, but never treat a clean lint result as evidence that the technical meaning or word sense is correct.
 

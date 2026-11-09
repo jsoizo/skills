@@ -8,7 +8,7 @@ Use only examples relevant to the current technology and sentence function. The 
 
 **Literal:** このフックは、Effectを再実行させることなく最新の値をキャプチャします。
 
-**Preferred:** このフックを使うと、Effectを再実行せずに最新の値を参照できます。
+**Preferred:** このフックを使うとEffectを再実行せずに最新の値を参照できます。
 
 Reason: `capture` describes access to a value here, not a user-visible capture operation.
 
@@ -38,7 +38,7 @@ Reason: The mechanism determines the verb.
 
 **Literal:** このAPIは、クライアントがカスタムシリアライザーを提供することを許可します。
 
-**Preferred:** クライアントは、このAPIに独自のシリアライザーを指定できます。
+**Preferred:** クライアントはこのAPIに独自のシリアライザーを指定できます。
 
 ## URLs and dependencies
 
@@ -62,6 +62,8 @@ Reason: `依存関係を解決する` is established usage; do not expand it mer
 
 **Preferred:** このフレームワークは、推奨する設計や利用方法を強く規定します。
 
+Reason: Without the 読点, `このフレームワークは推奨する` reads as the main clause until `設計` forces a re-parse.
+
 **English:** The abstraction leaks implementation details.
 
 **Literal:** この抽象化は実装の詳細をリークします。
@@ -74,13 +76,15 @@ Reason: `依存関係を解決する` is established usage; do not expand it mer
 
 **Preferred:** 接続の作成から破棄までを、このサービスが管理します。
 
+Reason: The object comes before the subject, so the 読点 marks the inverted order.
+
 ## Data and consistency
 
 **English:** The cache is invalidated after a successful write.
 
 **Over-explained:** 書き込みが成功すると、保存されていた値を使用できない状態にします。
 
-**Preferred:** 書き込みに成功すると、キャッシュを無効化します。
+**Preferred:** 書き込みに成功するとキャッシュを無効化します。
 
 **English:** Reads are eventually consistent.
 
@@ -114,7 +118,7 @@ Reason: `依存関係を解決する` is established usage; do not expand it mer
 
 **Wrongly strong:** クライアントは接続を再利用する必要があります。
 
-**Preferred:** クライアントでは、接続の再利用を推奨します。
+**Preferred:** クライアントでは接続の再利用を推奨します。
 
 ## Decision framing
 
@@ -123,3 +127,21 @@ Context: `今の穴` refers to a blocking call found in a WebFlux handler.
 **Original:** ここには 2 つの問いがあり、答えは別々です。1 つ目は「今の穴を直すか」で、答えは「直す」です。2 つ目は「WebFlux を続けるか」で、性能は判断材料になりません。どちらを選んでも、今の負荷なら性能は足ります。
 
 **Preferred:** 見つかった同期処理は直します。WebFlux を続けるかどうかは、性能では決まりません。続けてもやめても、今の負荷なら性能は十分だからです。
+
+## Punctuation
+
+**English:** In the old layout, this page comes first.
+
+**Literal:** 旧レイアウトでは、このページが先頭です。
+
+**Preferred:** 旧レイアウトではこのページが先頭です。
+
+Reason: A short phrase that leads straight into one predicate needs no 読点, even though English sets it off with a comma.
+
+**English:** Unlike v1, the importer no longer skips invalid rows, so a single bad row aborts the whole import, and you need to clean the CSV first.
+
+**Literal:** v1とは異なり、インポーターは不正な行をスキップしなくなったため、不正な行が1つでもあるとインポート全体が中断され、事前にCSVを整える必要があります。
+
+**Preferred:** v1と違い、インポーターは不正な行を読み飛ばしません。不正な行が1つでもあればインポート全体が中断されるので、先にCSVを整える必要があります。
+
+Reason: Split the sentence instead of chaining clauses with 読点.

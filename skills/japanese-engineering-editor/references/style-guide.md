@@ -5,7 +5,7 @@ Use this guide for translation or substantive rewriting. The objective is fast a
 ## Information structure
 
 - Put the condition before the result when the condition determines how the sentence is read.
-- State the component or reader action once; omit repeated subjects when they remain obvious.
+- State the component or reader action once; omit repeated subjects when they remain obvious. English states a subject in every sentence; do not turn each one into a new `X は` while the topic stays the same.
 - Split a sentence when it contains more than one independent condition or consequence.
 - Prefer chronological order for procedures and causal order for explanations.
 - In reference documentation, lead with what the API does. In tutorials, lead with what the reader should do.
@@ -15,6 +15,26 @@ Use this guide for translation or substantive rewriting. The objective is fast a
 - Use the same sentence frame for parallel claims, with each item's subject as the topic (`同期処理は…。WebFlux を続けるかどうかは…。`). Do not frame parallel items as questions (`1 つ目は…かどうかです。`). When the items differ in status, mark the contrast with the topics themselves or with `前者は…／後者は…`, not with `これは…／こちらは…`.
 - Use `どちら` or `両方` only after the alternatives have been named in the text. If the source does not name the alternatives, do not invent them; rephrase instead, for example `続けるかどうかに関係なく`.
 - When splitting a long sentence, keep the logical link. A sentence that gives the reason for the previous one ends with `〜からです`.
+
+## 読点
+
+Place a 読点 where the Japanese sentence needs one, not where the English had a comma. Keep it:
+
+- at the boundary between two long modifiers of the same predicate;
+- after a long phrase placed before the subject, or after an object moved ahead of the subject (`接続の作成から破棄までを、このサービスが管理します`);
+- where removing it changes what a phrase modifies or makes the reader re-parse. A topic followed by a relative clause (`このフレームワークは、推奨する設計を…`) and a condition followed by a clause with its own subject (`タイムアウトを延ばすと、DB が本当に止まったときも検知が遅れます`) both misread without one;
+- after a sentence-initial conjunction or connective (`ただし、`, `なお、`, `一方、`, `この場合、`);
+- after 連用中止, or after `が`, `ので`, `から`, or `けれど` when another clause follows.
+
+Test every other 読点 by deleting it and rereading. If the sentence still parses the same way on first reading, leave it out. A short phrase, or a short `と`, `ば`, or `たら` condition, that leads straight into a single predicate rarely passes, even when English sets it off with a comma (`For now,`, `In the old layout,`, `If the write succeeds,`): `旧レイアウトでは、このページが先頭です` becomes `旧レイアウトではこのページが先頭です`.
+
+Do not strip 読点 after `は` across the board. Keep it when the topic is long or another `では` or `には` phrase follows (`この案は、2 章ではそのまま成り立ちます`).
+
+When a sentence would need a fourth 読点 outside a noun list, or chains three clauses with 連用中止 or `が`, split it or use a list instead.
+
+Readers scan headings, titles, and bold labels instead of parsing them. A heading that seems to need a 読点 is a sentence or holds two points. Do not just delete the 読点. Cut the heading to its main point and leave the rest to the body: `設定ファイルを読み、環境変数で上書きする` becomes `環境変数が設定ファイルより優先される`. A section heading that runs past about 25 characters usually needs the same cut. A 読点 that itself separates listed nouns (`設計、実装、テスト`) stays, but do not add one after `と` or `や` (`テストの前提と残っている作業`).
+
+Other English punctuation follows the same rule. Do not carry a colon or a dash into Japanese prose because the English had one.
 
 ## Terminology decisions
 
@@ -68,5 +88,6 @@ These are diagnostics, not blind substitutions. `提供する`, `サポートす
 - Would searching the Japanese term lead to the expected ecosystem terminology?
 - Did a natural rewrite weaken a condition or requirement?
 - Does every pronoun or omitted subject still have one plausible referent?
+- Does each 読点 match one of the cases above where Japanese keeps it, or does it copy an English comma?
 - Do parallel items share one sentence pattern, and does every `どちら` or `両方` point to alternatives already named?
 - Are code and document syntax byte-for-byte intact where required?
