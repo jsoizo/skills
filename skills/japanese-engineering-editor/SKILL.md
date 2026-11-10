@@ -1,6 +1,6 @@
 ---
 name: japanese-engineering-editor
-description: Translate English software-engineering content into clear Japanese or revise stiff, literal, AI-generated Japanese while preserving technical meaning, identifiers, and established terminology. Use for developer documentation, ADRs, RFCs, code reviews, release notes, incident reports, and technical explanations; do not use for ordinary nontechnical translation.
+description: Translate English software-engineering content into clear Japanese or revise stiff, literal, AI-generated Japanese while preserving technical meaning, identifiers, and established terminology. Use for developer documentation, ADRs, RFCs, code reviews, release notes, incident reports, technical blog articles, slides, and technical explanations; do not use for ordinary nontechnical translation.
 ---
 # Japanese Engineering Editor
 
@@ -53,7 +53,7 @@ Preserve code identifiers, commands, paths, URLs, Markdown structure, placeholde
 - Prefer a concrete operation over a translated metaphor: `surface an error` becomes `エラーを呼び出し元に返す` or `画面に表示する`, depending on behavior.
 - Keep established terms when they aid recognition and search: `キャッシュを無効化する`, `依存関係を解決する`, `結果整合性`.
 - At first use, briefly explain a specialized loanword whose literal form does not reveal its behavior.
-- Avoid English-style inanimate subjects, stacked nouns, repeated possessives, excessive passive voice, and automatic mappings such as `provide = 提供する`, `allow = 許可する`, or `support = サポートする`.
+- Avoid English-style inanimate subjects, stacked nouns, repeated possessives, excessive passive voice, and automatic mappings such as `provide = 提供する`, `allow = 許可する`, or `support = サポートする`. In replies and reports, do not hide who acted behind a passive thing (`見出しが採用されました`); the style guide says when the passive stays.
 - Place each 読点 where the Japanese 係り受け needs one, not where the English had a comma. `In the old layout, this page comes first.` becomes `旧レイアウトではこのページが先頭です。`, not `旧レイアウトでは、このページが先頭です。` Keep a 読点 that marks inverted order, separates two long modifiers, follows a sentence-initial connective, or prevents a misreading. When a heading seems to need a 読点, cut it to its main point instead of deleting the 読点.
 - Prefer reader action for procedures and component behavior for reference material.
 - Preserve the force of `must`, `should`, `may`, `can`, and probabilistic language.
@@ -64,7 +64,7 @@ For detailed decisions and common traps, read [references/style-guide.md](refere
 ## Review in two independent passes
 
 1. **Fidelity:** Compare with the source and verify actors, conditions, causality, negation, modality, quantities, and terminology. Reject a fluent rewrite that changes behavior.
-2. **Japanese quality:** Remove source-language syntax and punctuation (a 読点 copied from an English comma), vague translated metaphors, redundant subjects, noun-heavy phrasing, and unnatural commands.
+2. **Japanese quality:** Remove source-language syntax and punctuation (a 読点 copied from an English comma; fold a parenthetical aside into the sentence), vague translated metaphors, redundant subjects, noun-heavy phrasing, and unnatural commands.
 
 Also check that protected syntax and identifiers are unchanged. A text linter may catch mechanical issues, but never treat a clean lint result as evidence that the technical meaning or word sense is correct.
 

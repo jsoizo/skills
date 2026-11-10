@@ -78,6 +78,24 @@ Reason: Without the 読点, `このフレームワークは推奨する` reads a
 
 Reason: The object comes before the subject, so the 読点 marks the inverted order.
 
+**English:** Keep anything that cannot be supported on every target out of the common public API.
+
+**Literal:** 全ターゲットで支えられないものを共通の公開 API に入れない。
+
+**Preferred:** 全ターゲットで実装できないものは共通の公開 API に入れない。
+
+Reason: `support` here means implementing the API on each target. `支える` copies the dictionary sense.
+
+Context: a reconciliation spec has three cases, and the naive implementation scatters them across loop conditions.
+
+**English:** The three cases in the spec are not reflected in the shape of the code.
+
+**Literal:** 仕様の 3 つの場合がコードの形に現れていない。
+
+**Preferred:** 3 つの場合があることをコードから読み取りにくい。
+
+Reason: `形に現れる` copies the English image. Say what the reader has trouble doing.
+
 ## Data and consistency
 
 **English:** The cache is invalidated after a successful write.
@@ -91,6 +109,26 @@ Reason: The object comes before the subject, so the 読点 marks the inverted or
 **Preferred first use:** 読み取りは結果整合性モデルです。更新直後には古い値が返る可能性がありますが、時間がたてば最新値に収束します。
 
 **Preferred later use:** 読み取りは結果整合性です。
+
+## Passive voice
+
+**English:** The token is rotated by the gateway every hour.
+
+**Literal:** トークンはゲートウェイによって 1 時間ごとにローテーションされます。
+
+**Preferred:** ゲートウェイがトークンを 1 時間ごとにローテーションします。
+
+Reason: The source names the actor, so make it the subject.
+
+Context: a reply to the user after a review round.
+
+**English:** Your suggestion was applied to the README, and the failing test has not been fixed yet.
+
+**Literal:** README には提案が反映され、失敗しているテストはまだ修正されていません。
+
+**Preferred:** README は提案どおりに直しました。失敗しているテストはまだ直していません。
+
+Reason: In a reply, the actor hidden behind the passive is you. Say what you did and what you have not done.
 
 ## Procedures
 

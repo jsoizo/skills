@@ -6,6 +6,11 @@ Use this guide for translation or substantive rewriting. The objective is fast a
 
 - Put the condition before the result when the condition determines how the sentence is read.
 - State the component or reader action once; omit repeated subjects when they remain obvious. English states a subject in every sentence; do not turn each one into a new `X は` while the topic stays the same.
+- A thing as the subject of a passive verb (非情の受身) reads as translationese in two cases:
+  - An English `by X` copied as `X によって…される`. Make X the subject (`ゲートウェイがトークンを 1 時間ごとにローテーションします`), or keep the thing as the topic with an active verb (`トークンはゲートウェイが 1 時間ごとにローテーションします`).
+  - A reply or report that hides what you or the reader did (`見出しが採用されました`, `規則が適用されていなかった`, `README に提案が反映されました`). The reader has to work out who acted. For your own actions, use an active verb and leave out `私が` (`README は提案どおりに直しました`). For the reader's actions, an intransitive verb usually reads better than `あなたが` (`見出しは最終版でも言い切りの形のまま残っています`). Do not use an intransitive verb to avoid saying what you did.
+
+  Keep the passive for system behavior with no actor in focus (`リクエストが再試行されることがあります`, `インポート全体が中断されます`) and for a third party who does not matter to the reader (`PR は今朝マージされました`).
 - Split a sentence when it contains more than one independent condition or consequence.
 - Prefer chronological order for procedures and causal order for explanations.
 - In reference documentation, lead with what the API does. In tutorials, lead with what the reader should do.
@@ -34,7 +39,7 @@ When a sentence would need a fourth 読点 outside a noun list, or chains three 
 
 Readers scan headings, titles, and bold labels instead of parsing them. A heading that seems to need a 読点 is a sentence or holds two points. Do not just delete the 読点. Cut the heading to its main point and leave the rest to the body: `設定ファイルを読み、環境変数で上書きする` becomes `環境変数が設定ファイルより優先される`. A section heading that runs past about 25 characters usually needs the same cut. A 読点 that itself separates listed nouns (`設計、実装、テスト`) stays, but do not add one after `と` or `や` (`テストの前提と残っている作業`).
 
-Other English punctuation follows the same rule. Do not carry a colon or a dash into Japanese prose because the English had one.
+Other English punctuation follows the same rule. Do not carry a colon or a dash into Japanese prose because the English had one. An aside in parentheses that carries its own clause (a condition, a qualification, a relative clause) goes into the sentence through word order or into its own sentence: `このフラグ（デフォルトでは無効で、次のリリースで削除予定）を有効にすると…` becomes `このフラグはデフォルトでは無効です。有効にすると…。なお、このフラグは次のリリースで削除する予定です。` Drop an aside only when it repeats what the text already says. Parentheses that label the thing just named stay: the original term or an abbreviation at first use (`結果整合性（eventual consistency）`, `サービスレベル目標（SLO）`), an identifier, a unit, or a cross-reference.
 
 ## Terminology decisions
 
@@ -62,6 +67,7 @@ Do not create a global mapping for polysemous words. Scope entries by technology
 | abstraction leaks | 抽象化がリークする | 下位実装の都合が利用側から見える |
 | early stage | アーリーステージ | 前半のステージ／先に実行されるステージ |
 | review how ... works | ～がどう機能するかレビューする | ～の仕組みを確認する |
+| time window, meaning the period after an event | 10 分の窓 | 開始から 10 分／10 分の制限／直近 10 分間 |
 
 These are diagnostics, not blind substitutions. `提供する`, `サポートする`, and passive voice are acceptable when they express the intended meaning naturally.
 
@@ -81,6 +87,7 @@ These are diagnostics, not blind substitutions. `提供する`, `サポートす
 - **Incident report:** distinguish observed fact, hypothesis, cause, and remediation.
 - **Code review:** state the risk and requested change directly; avoid unnecessarily authoritative wording.
 - **Release notes:** state what changed, who is affected, and whether action is required.
+- **Blog article and slides:** where a section argues a point, make its heading or slide title state that point in one short clause, in plain form without 句点, and no more certain than the body: `素朴な実装からは 3 つの場合が読み取りにくい`, not `素朴な実装の問題点`. Short or descriptive sections keep topic headings, and so do reference docs and procedures (`インストール`).
 
 ## Final checks
 
