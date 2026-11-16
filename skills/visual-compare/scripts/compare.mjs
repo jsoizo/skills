@@ -6,6 +6,8 @@ import os from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
+const ODIFF_BIN = "odiff-bin@4.5.0"
+
 const USAGE = `Usage: bun compare.mjs --a <dir> --b <dir> --out <dir> [options]
 
 Options:
@@ -47,16 +49,16 @@ function fail(message, code = 1) {
 }
 
 async function loadOdiff() {
-  const hint = "Run it with `bun <skill-dir>/scripts/compare.mjs ...`. The first run downloads odiff-bin 4.5.0 into Bun's cache and needs network access."
+  const hint = `Run it with \`bun <skill-dir>/scripts/compare.mjs ...\`. The first run downloads ${ODIFF_BIN} into Bun's cache and needs network access.`
   if (typeof Bun === "undefined") {
     console.error(`This script needs Bun. ${hint}`)
     process.exit(2)
   }
   try {
-    // Bun rejects a versioned specifier under a package.json that has a name, so resolve from outside every project
-    return await import(Bun.resolveSync("odiff-bin@4.5.0", "/"))
+    // Bun skips auto-install when the file's directory or a parent has node_modules, so resolve from outside every project
+    return await import(Bun.resolveSync(ODIFF_BIN, "/"))
   } catch (e) {
-    console.error(`Could not load odiff-bin 4.5.0: ${e.message}\n${hint}`)
+    console.error(`Could not load ${ODIFF_BIN}: ${e.message}\n${hint}`)
     process.exit(2)
   }
 }
