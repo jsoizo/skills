@@ -53,6 +53,14 @@ Classify a term before choosing its Japanese form.
 
 Do not create a global mapping for polysemous words. Scope entries by technology and sense. For example, `resolve` may mean dependency resolution, DNS lookup, URL conversion, promise settlement, or problem resolution.
 
+Approved term choices, each scoped to one sense:
+
+| Sense | Use | Avoid |
+| --- | --- | --- |
+| `version` of software, a library, a language, or an API | `バージョン` (`Kotlin のバージョンがずれる`, `detekt のバージョンを上げる`) | `版` (`Kotlin の版`, `同じ版にする`) |
+
+`版` still fits editions of printed works, such as `第 2 版`.
+
 ## Frequent translationese patterns
 
 | Pattern | Usually weak | Prefer |
